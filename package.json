@@ -1,0 +1,28 @@
+{
+  "name": "xdev",
+  "version": "0.0.12",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "probe": "node --experimental-strip-types src/runtime/capability-probe.ts",
+    "xdev": "node --experimental-strip-types src/owner-ux/xdev.ts",
+    "mcp": "node --experimental-strip-types mcp/server.ts",
+    "mcp:configure": "node --experimental-strip-types mcp/configure.ts",
+    "xdev:local": "node --experimental-strip-types mcp/local.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "@dagrejs/graphlib": "4.0.5",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
+  },
+  "license": "MPL-2.0"
+}

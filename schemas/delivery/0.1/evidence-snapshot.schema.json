@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/delivery/0.1/evidence-snapshot.schema.json",
+  "title": "XDev Evidence Snapshot 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_id", "snapshot_digest", "task_id", "run_ids", "repo_root_identity", "spec_manifest", "acceptance_criteria_ids", "repo_head", "index_digest", "path_hash_manifest", "evidence_manifest", "frozen_at"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "snapshot_id": { "type": "string", "pattern": "^es-v0\\.1:[0-9a-f]{64}$" },
+    "snapshot_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+    "run_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/runId" } },
+    "repo_root_identity": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "spec_manifest": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["canonical_ref", "sha256"],
+        "properties": { "canonical_ref": { "$ref": "common.schema.json#/$defs/canonicalRepoPath" }, "sha256": { "$ref": "common.schema.json#/$defs/sha256" } }
+      }
+    },
+    "acceptance_criteria_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^AC-[A-Z0-9]+(?:-[A-Z0-9]+)+$" } },
+    "repo_head": { "type": "string", "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$" },
+    "index_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "path_hash_manifest": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["canonical_repo_relative_path", "kind", "git_mode", "sha256"],
+        "properties": {
+          "canonical_repo_relative_path": { "$ref": "common.schema.json#/$defs/canonicalRepoPath" },
+          "kind": { "enum": ["regular_file", "symlink", "gitlink"] },
+          "git_mode": { "type": "string", "pattern": "^[0-7]{6}$" },
+          "sha256": { "$ref": "common.schema.json#/$defs/sha256" }
+        }
+      }
+    },
+    "evidence_manifest": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evidence_id", "canonical_ref", "sha256"],
+        "properties": {
+          "evidence_id": { "type": "string", "pattern": "^EVID-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+          "canonical_ref": { "$ref": "common.schema.json#/$defs/canonicalRepoPath" },
+          "sha256": { "$ref": "common.schema.json#/$defs/sha256" }
+        }
+      }
+    },
+    "frozen_at": { "type": "string", "format": "date-time" }
+  }
+}

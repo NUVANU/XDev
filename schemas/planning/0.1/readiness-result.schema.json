@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/planning/0.1/readiness-result.schema.json",
+  "title": "XDev Readiness Result 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "status", "issues", "checked_at"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "plan_id": { "$ref": "common.schema.json#/$defs/planId" },
+    "status": { "enum": ["PASS", "NOT_READY", "BLOCKED", "UNKNOWN"] },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "message"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$" },
+          "severity": { "enum": ["error", "warning"] },
+          "artifact_ref": { "$ref": "common.schema.json#/$defs/relativePath" },
+          "message": { "$ref": "common.schema.json#/$defs/nonEmptyText" }
+        }
+      }
+    },
+    "checked_at": { "type": "string", "format": "date-time" }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/delivery/0.1/checkpoint-result.schema.json",
+  "title": "XDev Checkpoint Result 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "result_id", "policy_id", "policy_digest", "source_decision_id", "source_decision_digest", "policy_effective_at", "subject_task_id", "subject_run_ids", "task_contract_digest", "artifact_snapshot_id", "artifact_snapshot_digest", "reviewer_role_id", "outcome", "finding_refs", "created_at"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "result_id": { "type": "string", "pattern": "^CPR-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "policy_id": { "type": "string", "pattern": "^CP-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "policy_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "source_decision_id": { "type": "string", "pattern": "^OWNER-DECISION-[0-9]{3,}$" },
+    "source_decision_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "policy_effective_at": { "type": "string", "format": "date-time" },
+    "subject_task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+    "subject_run_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/runId" } },
+    "task_contract_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "artifact_snapshot_id": { "type": "string", "pattern": "^es-v0\\.1:[0-9a-f]{64}$" },
+    "artifact_snapshot_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "reviewer_role_id": { "$ref": "common.schema.json#/$defs/roleId" },
+    "outcome": { "enum": ["PASS", "FAIL"] },
+    "finding_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/artifactRef" } },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/project-model/0.2/task-contract.schema.json",
+  "title": "XDev Task Contract 0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "title", "objective", "source_requirement_ids", "acceptance_criteria", "allowed_scope", "forbidden_scope", "dependencies", "interface_contracts", "expected_outputs", "required_tests", "required_evidence", "task_kind", "repository_access", "critical_boundaries", "risk_level", "complexity_profile", "owner_gate_conditions", "state"],
+  "properties": {
+    "schema_version": { "const": "0.2" },
+    "task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+    "title": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "objective": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "source_requirement_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/requirementId" } },
+    "acceptance_criteria": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/acceptanceCriterionId" } },
+    "workstream_id": { "$ref": "common.schema.json#/$defs/identifier" },
+    "allowed_scope": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/relativePath" } },
+    "forbidden_scope": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/nonEmptyText" } },
+    "dependencies": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/taskId" } },
+    "interface_contracts": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/nonEmptyText" } },
+    "expected_outputs": { "type": "array", "minItems": 1, "items": { "$ref": "common.schema.json#/$defs/nonEmptyText" } },
+    "required_tests": { "type": "array", "minItems": 1, "items": { "$ref": "common.schema.json#/$defs/nonEmptyText" } },
+    "required_evidence": { "type": "array", "minItems": 1, "items": { "$ref": "common.schema.json#/$defs/nonEmptyText" } },
+    "task_kind": { "enum": ["implementation", "checkpoint_control", "review_control", "verification_control"] },
+    "repository_access": { "enum": ["read_only", "write_scoped"] },
+    "critical_boundaries": { "type": "array", "uniqueItems": true, "items": { "enum": ["security", "state_migration", "evidence", "permission", "privacy", "payment", "authentication", "write_scope", "public_schema", "plan_validation", "readiness"] } },
+    "risk_level": { "enum": ["low", "medium", "medium-high", "high"] },
+    "complexity_profile": { "$ref": "common.schema.json#/$defs/complexityProfile" },
+    "model_policy_constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_model_tier", "minimum_reasoning_tier"],
+      "properties": {
+        "minimum_model_tier": { "enum": ["FAST", "BALANCED", "STRONG", "MAX"] },
+        "minimum_reasoning_tier": { "enum": ["LOW", "MEDIUM", "HIGH", "XHIGH_OR_MAX"] }
+      }
+    },
+    "owner_gate_conditions": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/ownerGateId" } },
+    "state": { "enum": ["BACKLOG", "PLANNED", "READINESS_CHECK", "READY", "IN_PROGRESS", "IMPLEMENTED", "PROTOTYPE_READY", "CODE_REVIEW", "QA", "EVIDENCE_CHECK", "SPEC_CHECK", "TASK_VERIFIED", "REWORK", "BLOCKED", "REPEATED_FAILURE"] }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "task_kind": { "enum": ["checkpoint_control", "review_control", "verification_control"] } }, "required": ["task_kind"] },
+      "then": { "properties": { "repository_access": { "const": "read_only" }, "critical_boundaries": { "type": "array", "maxItems": 0 } } }
+    }
+  ]
+}

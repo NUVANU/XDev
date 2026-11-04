@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/project-model/0.2/owner-gate.schema.json",
+  "title": "XDev Owner Gate 0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "owner_gate_id", "title", "occurred", "reason", "question", "options", "recommendation", "affected_requirement_ids", "affected_task_ids", "affected_artifact_refs", "status", "created_at"],
+  "properties": {
+    "schema_version": { "const": "0.2" },
+    "owner_gate_id": { "$ref": "common.schema.json#/$defs/ownerGateId" },
+    "title": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "occurred": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "reason": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "question": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "options": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["option_id", "title", "description", "cost", "experience", "risk", "follow_up_impact"],
+        "properties": {
+          "option_id": { "type": "string", "pattern": "^[A-Z]$" },
+          "title": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+          "description": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+          "cost": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+          "experience": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+          "risk": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+          "follow_up_impact": { "$ref": "common.schema.json#/$defs/nonEmptyText" }
+        }
+      }
+    },
+    "recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["option_id", "reason"],
+      "properties": {
+        "option_id": { "type": "string", "pattern": "^[A-Z]$" },
+        "reason": { "$ref": "common.schema.json#/$defs/nonEmptyText" }
+      }
+    },
+    "affected_requirement_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/requirementId" } },
+    "affected_task_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/taskId" } },
+    "affected_artifact_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/relativePath" } },
+    "status": { "enum": ["pending", "approved", "rejected", "resolved"] },
+    "decision_ref": { "$ref": "common.schema.json#/$defs/relativePath" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "resolved_at": { "type": "string", "format": "date-time" }
+  }
+}

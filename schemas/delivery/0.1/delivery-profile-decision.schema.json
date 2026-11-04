@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/delivery/0.1/delivery-profile-decision.schema.json",
+  "title": "XDev Delivery Profile Decision 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_decision_id", "requested_profile", "effective_profile", "recommendation_reason", "risk_factors", "escalation_reasons", "owner_selected", "created_at"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "profile_decision_id": { "$ref": "common.schema.json#/$defs/profileDecisionId" },
+    "requested_profile": { "$ref": "common.schema.json#/$defs/profile" },
+    "effective_profile": { "$ref": "common.schema.json#/$defs/profile" },
+    "recommendation_reason": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "risk_factors": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/nonEmptyText" } },
+    "escalation_reasons": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/nonEmptyText" } },
+    "owner_selected": { "type": "boolean" },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "requested_profile": { "const": "quick_verified" } }, "required": ["requested_profile"] },
+      "then": { "properties": { "effective_profile": { "enum": ["quick_verified", "full_governance"] } } }
+    },
+    {
+      "if": { "properties": { "requested_profile": { "const": "full_governance" } }, "required": ["requested_profile"] },
+      "then": { "properties": { "effective_profile": { "const": "full_governance" } } }
+    }
+  ]
+}

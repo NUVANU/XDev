@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/project-model/0.1/acceptance-criterion.schema.json",
+  "title": "XDev Acceptance Criterion 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "statement", "verification_method", "status"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "id": { "$ref": "common.schema.json#/$defs/acceptanceCriterionId" },
+    "statement": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "verification_method": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "status": { "enum": ["draft", "approved", "verified", "blocked", "superseded"] }
+  }
+}

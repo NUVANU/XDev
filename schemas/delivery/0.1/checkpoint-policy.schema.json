@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/delivery/0.1/checkpoint-policy.schema.json",
+  "title": "XDev Checkpoint Policy 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_id", "policy_digest", "subject_task_id", "subject_task_kind", "subject_repository_access", "subject_risk_level", "critical_boundary_evaluations", "derived_consumer_task_ids", "has_writable_outputs", "has_writable_interfaces", "reviewer_independence_required", "trigger_reasons", "disposition", "source_decision_id", "source_decision_digest", "effective_at", "rationale"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "policy_id": { "type": "string", "pattern": "^CP-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "policy_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "subject_task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+    "subject_task_kind": { "enum": ["implementation", "checkpoint_control", "review_control", "verification_control"] },
+    "subject_repository_access": { "enum": ["read_only", "write_scoped"] },
+    "subject_risk_level": { "enum": ["low", "medium", "medium-high", "high"] },
+    "critical_boundary_evaluations": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["boundary", "changed", "producer_interface_refs", "consumer_task_ids"],
+        "properties": {
+          "boundary": { "$ref": "common.schema.json#/$defs/criticalBoundary" },
+          "changed": { "type": "boolean" },
+          "producer_interface_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/nonEmptyText" } },
+          "consumer_task_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/taskId" } }
+        }
+      }
+    },
+    "derived_consumer_task_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/taskId" } },
+    "has_writable_outputs": { "type": "boolean" },
+    "has_writable_interfaces": { "type": "boolean" },
+    "reviewer_independence_required": { "type": "boolean" },
+    "trigger_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["critical_boundary_change", "multiple_downstream_consumers", "shared_interface_contract", "control_exemption", "no_checkpoint_trigger"] }
+    },
+    "checkpoint_task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+    "disposition": { "enum": ["required", "exempt_control", "not_required"] },
+    "source_decision_id": { "type": "string", "pattern": "^OWNER-DECISION-[0-9]{3,}$" },
+    "source_decision_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "effective_at": { "type": "string", "format": "date-time" },
+    "rationale": { "$ref": "common.schema.json#/$defs/nonEmptyText" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "subject_task_kind": { "enum": ["checkpoint_control", "review_control", "verification_control"] } }, "required": ["subject_task_kind"] },
+      "then": {
+        "properties": {
+          "subject_repository_access": { "const": "read_only" },
+          "has_writable_outputs": { "const": false },
+          "has_writable_interfaces": { "const": false }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "disposition": { "const": "required" } }, "required": ["disposition"] },
+      "then": { "required": ["checkpoint_task_id"], "properties": { "checkpoint_task_id": { "$ref": "common.schema.json#/$defs/taskId" }, "subject_task_kind": { "const": "implementation" }, "subject_repository_access": { "const": "write_scoped" }, "reviewer_independence_required": { "const": true } } }
+    },
+    {
+      "if": { "properties": { "disposition": { "const": "exempt_control" } }, "required": ["disposition"] },
+      "then": {
+        "not": { "required": ["checkpoint_task_id"] },
+        "properties": {
+          "subject_task_kind": { "enum": ["checkpoint_control", "review_control", "verification_control"] },
+          "subject_repository_access": { "const": "read_only" },
+          "has_writable_outputs": { "const": false },
+          "has_writable_interfaces": { "const": false },
+          "reviewer_independence_required": { "const": true },
+          "trigger_reasons": { "const": ["control_exemption"] }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "disposition": { "const": "not_required" } }, "required": ["disposition"] },
+      "then": { "not": { "required": ["checkpoint_task_id"] } }
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/delivery/0.1/common.schema.json",
+  "$defs": {
+    "nonEmptyText": { "type": "string", "minLength": 1, "maxLength": 10000, "pattern": "\\S" },
+    "artifactRef": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:)(?!/)(?!\\\\)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$" },
+    "profile": { "enum": ["prototype", "quick_verified", "full_governance"] },
+    "profileDecisionId": { "type": "string", "pattern": "^DPD-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "deliveryOutcomeId": { "type": "string", "pattern": "^DO-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "deliveryReportId": { "type": "string", "pattern": "^DR-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "taskId": { "type": "string", "pattern": "^M(?:0|[1-9][0-9]*)-T[0-9]{3,}$" },
+    "projectId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
+    "runId": { "type": "string", "pattern": "^RUN-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "roleId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "canonicalRepoPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!\\\\)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*(?:^|/)[^/]*[. ](?:/|$))[^/]+(?:/[^/]+)*$"
+    },
+    "criticalBoundary": {
+      "enum": ["security", "state_migration", "evidence", "permission", "privacy", "payment", "authentication", "write_scope", "public_schema", "plan_validation", "readiness"]
+    }
+  }
+}

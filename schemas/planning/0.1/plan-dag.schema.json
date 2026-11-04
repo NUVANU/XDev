@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/planning/0.1/plan-dag.schema.json",
+  "title": "XDev Plan DAG 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "nodes"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["task_id", "depends_on"],
+        "properties": {
+          "task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+          "depends_on": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/taskId" } }
+        }
+      }
+    }
+  }
+}

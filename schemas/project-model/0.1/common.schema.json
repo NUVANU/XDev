@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/project-model/0.1/common.schema.json",
+  "$defs": {
+    "nonEmptyText": { "type": "string", "minLength": 1, "maxLength": 10000, "pattern": "\\S" },
+    "projectId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
+    "identifier": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$" },
+    "acceptanceCriterionId": { "type": "string", "pattern": "^AC-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "requirementId": { "type": "string", "pattern": "^REQ-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "milestoneId": { "type": "string", "pattern": "^M(?:0|[1-9][0-9]*)$" },
+    "taskId": { "type": "string", "pattern": "^M(?:0|[1-9][0-9]*)-T[0-9]{3,}$" },
+    "ownerGateId": { "type": "string", "pattern": "^OG-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!\\\\)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
+    },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0 },
+    "complexityProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reasoning", "ambiguity", "scope", "dependencies", "interface_impact", "failure_cost", "security", "novelty", "verification"],
+      "properties": {
+        "reasoning": { "$ref": "#/$defs/complexityDimension" },
+        "ambiguity": { "$ref": "#/$defs/complexityDimension" },
+        "scope": { "$ref": "#/$defs/complexityDimension" },
+        "dependencies": { "$ref": "#/$defs/complexityDimension" },
+        "interface_impact": { "$ref": "#/$defs/complexityDimension" },
+        "failure_cost": { "$ref": "#/$defs/complexityDimension" },
+        "security": { "$ref": "#/$defs/complexityDimension" },
+        "novelty": { "$ref": "#/$defs/complexityDimension" },
+        "verification": { "$ref": "#/$defs/complexityDimension" }
+      }
+    },
+    "complexityDimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "rationale"],
+      "properties": {
+        "score": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "rationale": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    }
+  }
+}

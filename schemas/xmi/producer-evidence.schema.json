@@ -1,0 +1,422 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xmi.local/schemas/producer-evidence-1",
+  "title": "XMi optional manifest producer evidence, revision 1",
+  "description": "Same-project exact-version domain history references; no human authentication or execution grant.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "evidence_status",
+    "source_coverage",
+    "subject",
+    "mode_selection",
+    "item_confirmations",
+    "scope_dispositions"
+  ],
+  "properties": {
+    "format": {
+      "const": "XMI-PRODUCER-EVIDENCE/1"
+    },
+    "evidence_status": {
+      "const": "SOURCE_REFERENCED_NOT_AUTHENTICATED"
+    },
+    "source_coverage": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNAVAILABLE"
+      ]
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id",
+        "product_model_version",
+        "spec_id",
+        "spec_version",
+        "canonical_xspec_sha256"
+      ],
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^XMI-[A-Z0-9-]+$"
+        },
+        "product_model_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "spec_id": {
+          "type": "string",
+          "pattern": "^XSPEC-[A-Z0-9-]+$"
+        },
+        "spec_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "canonical_xspec_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "mode_selection": {
+      "$ref": "#/$defs/modeSelection"
+    },
+    "item_confirmations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/itemConfirmation"
+      }
+    },
+    "scope_dispositions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/scopeDisposition"
+      }
+    }
+  },
+  "$defs": {
+    "sourceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "ref"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "conversation_turn",
+            "document",
+            "owner_action",
+            "system_rule",
+            "import"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "eventReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "event_version",
+        "event_hash",
+        "actor",
+        "command_kind",
+        "owner_source_ref"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "event_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "actor": {
+          "const": "owner"
+        },
+        "command_kind": {
+          "enum": [
+            "DELIVERY_MODE_SELECTED",
+            "DELIVERY_MODE_UPGRADED",
+            "ITEM_CONFIRMED",
+            "DECISION_APPROVED",
+            "SOLUTION_BLUEPRINT_APPROVED",
+            "SOLUTION_BLUEPRINT_DELEGATED",
+            "MODE_OVERRIDE_RESOLVED"
+          ]
+        },
+        "owner_source_ref": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "ref"
+          ],
+          "properties": {
+            "type": {
+              "const": "owner_action"
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "modeSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_mode",
+        "selection_source",
+        "status",
+        "event"
+      ],
+      "properties": {
+        "project_mode": {
+          "enum": [
+            "FAST_VALIDATION",
+            "FAST_DEVELOPMENT",
+            "PRODUCT_GRADE"
+          ]
+        },
+        "selection_source": {
+          "enum": [
+            "OWNER_CONFIRMED",
+            "IMPORTED_SUITE_POLICY"
+          ]
+        },
+        "status": {
+          "enum": [
+            "SOURCE_REFERENCED_NOT_AUTHENTICATED",
+            "UNAVAILABLE"
+          ]
+        },
+        "event": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/eventReference"
+                },
+                {
+                  "properties": {
+                    "command_kind": {
+                      "enum": [
+                        "DELIVERY_MODE_SELECTED",
+                        "DELIVERY_MODE_UPGRADED"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "UNAVAILABLE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "event": {
+                "$ref": "#/$defs/eventReference"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "itemConfirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_id",
+        "item_version",
+        "status",
+        "event"
+      ],
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "item_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "enum": [
+            "SOURCE_REFERENCED_NOT_AUTHENTICATED",
+            "UNAVAILABLE"
+          ]
+        },
+        "event": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/eventReference"
+                },
+                {
+                  "properties": {
+                    "command_kind": {
+                      "enum": [
+                        "ITEM_CONFIRMED",
+                        "DECISION_APPROVED",
+                        "SOLUTION_BLUEPRINT_APPROVED",
+                        "SOLUTION_BLUEPRINT_DELEGATED"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "UNAVAILABLE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "event": {
+                "$ref": "#/$defs/eventReference"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scopeDisposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "scope_ids",
+        "minimum_mode",
+        "resolution",
+        "source_refs",
+        "status",
+        "event"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "minimum_mode": {
+          "enum": [
+            "FAST_VALIDATION",
+            "FAST_DEVELOPMENT",
+            "PRODUCT_GRADE"
+          ]
+        },
+        "resolution": {
+          "enum": [
+            "UPGRADE_SCOPE",
+            "UPGRADE_PROJECT",
+            "STUB_OR_SANDBOX",
+            "DEFER_OR_EXCLUDE"
+          ]
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceReference"
+          }
+        },
+        "status": {
+          "enum": [
+            "SOURCE_REFERENCED_NOT_AUTHENTICATED",
+            "UNAVAILABLE"
+          ]
+        },
+        "event": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/eventReference"
+                },
+                {
+                  "properties": {
+                    "command_kind": {
+                      "enum": [
+                        "MODE_OVERRIDE_RESOLVED"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "UNAVAILABLE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "event": {
+                "$ref": "#/$defs/eventReference"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,751 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/planning/0.1/retry-history-authority.schema.json",
+  "title": "RetryHistoryAuthority 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "authority_id": {
+      "type": "string",
+      "pattern": "^rha-v0\\.1:[0-9a-f]{64}$"
+    },
+    "authority_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "root_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "root_identity_version": {
+          "const": "0.1"
+        },
+        "repo_root_identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "canonical_root_path_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "project_state_ref": {
+          "const": ".xdev/project-state.json"
+        },
+        "project_state_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "root_identity_version",
+        "repo_root_identity",
+        "canonical_root_path_sha256",
+        "project_state_ref",
+        "project_state_sha256"
+      ]
+    },
+    "source_contract_version": {
+      "const": "retry-source-event-0.1"
+    },
+    "source_paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "project_state": {
+          "const": ".xdev/project-state.json"
+        },
+        "ledger": {
+          "const": ".xdev/task-ledger.jsonl"
+        }
+      },
+      "required": [
+        "project_state",
+        "ledger"
+      ]
+    },
+    "snapshot_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "snapshot_ref": {
+          "const": ".xdev/evidence/retry-history-authority-snapshot.json"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshot_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "snapshot_frozen_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "snapshot_ref",
+        "snapshot_id",
+        "snapshot_digest",
+        "snapshot_frozen_at"
+      ]
+    },
+    "source_watermark": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ledger_ref": {
+          "const": ".xdev/task-ledger.jsonl"
+        },
+        "ledger_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "ledger_line_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "last_event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "last_event_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "ledger_ref",
+        "ledger_sha256",
+        "ledger_line_count",
+        "last_event_id",
+        "last_event_sha256"
+      ]
+    },
+    "legacy_transition_binding": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "projection_ref": {
+              "const": ".xdev/diagnostics/M2-T002-STAGE-A-LEGACY-PROJECTION-002.json"
+            },
+            "projection_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "projection_ref",
+            "projection_sha256"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lineages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "root_task_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "task_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "task_contract_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "task_contract_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "initial",
+                    "rename",
+                    "split",
+                    "replan",
+                    "reassignment"
+                  ]
+                },
+                "source_event_id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "task_id",
+                "task_contract_ref",
+                "task_contract_sha256",
+                "origin",
+                "source_event_id"
+              ]
+            },
+            "minItems": 1
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "parent_task_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "child_task_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "relation": {
+                  "type": "string",
+                  "enum": [
+                    "rename",
+                    "split",
+                    "replan",
+                    "reassignment"
+                  ]
+                },
+                "source_event_id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "parent_task_id",
+                "child_task_id",
+                "relation",
+                "source_event_id"
+              ]
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "root_task_id",
+          "nodes",
+          "edges"
+        ]
+      },
+      "minItems": 1
+    },
+    "fingerprints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "fingerprint_id": {
+            "type": "string",
+            "pattern": "^ff-v0\\.1:[0-9a-f]{64}$"
+          },
+          "fingerprint_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fingerprint_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "canonical_tuple": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "schema_version": {
+                "const": "0.1"
+              },
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "planning",
+                  "dispatch",
+                  "implementation",
+                  "checkpoint",
+                  "review",
+                  "verification",
+                  "integration"
+                ]
+              },
+              "issue_code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "contract_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              },
+              "affected_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              },
+              "root_cause_class": {
+                "type": "string",
+                "enum": [
+                  "requirements",
+                  "design",
+                  "implementation",
+                  "test",
+                  "environment",
+                  "permission",
+                  "dependency",
+                  "model"
+                ]
+              }
+            },
+            "required": [
+              "schema_version",
+              "stage",
+              "issue_code",
+              "contract_refs",
+              "affected_paths",
+              "root_cause_class"
+            ]
+          },
+          "canonical_tuple_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "fingerprint_id",
+          "fingerprint_ref",
+          "fingerprint_sha256",
+          "canonical_tuple",
+          "canonical_tuple_sha256"
+        ]
+      },
+      "minItems": 0
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "run_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "task_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "lineage_root_task_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "terminal_disposition": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "implemented",
+                  "failed",
+                  "interrupted",
+                  "cancelled",
+                  "crashed",
+                  "unreachable"
+                ]
+              },
+              "charge_event_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_class": {
+                "const": "current"
+              },
+              "dispatch_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attempt_kind": {
+                "type": "string",
+                "enum": [
+                  "initial",
+                  "automatic_rework",
+                  "owner_granted_recovery"
+                ]
+              },
+              "failure_fingerprint_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^ff-v0\\.1:[0-9a-f]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "predecessor_run_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source_event_refs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "event_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "event_type": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "ledger_line": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "event_sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "task_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "payload_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "payload_sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "dispatch_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "attempt_kind": {
+                      "type": "string",
+                      "enum": [
+                        "initial",
+                        "automatic_rework",
+                        "owner_granted_recovery"
+                      ]
+                    },
+                    "failure_fingerprint_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^ff-v0\\.1:[0-9a-f]{64}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "event_id",
+                    "event_type",
+                    "ledger_line",
+                    "event_sha256",
+                    "project_id",
+                    "task_id",
+                    "run_id",
+                    "payload_ref",
+                    "payload_sha256",
+                    "created_at",
+                    "dispatch_id",
+                    "attempt_kind",
+                    "failure_fingerprint_id"
+                  ]
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "run_id",
+              "task_id",
+              "lineage_root_task_id",
+              "terminal_disposition",
+              "charge_event_id",
+              "source_class",
+              "dispatch_id",
+              "attempt_kind",
+              "failure_fingerprint_id",
+              "predecessor_run_id",
+              "source_event_refs"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "run_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "task_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "lineage_root_task_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "terminal_disposition": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "implemented",
+                  "failed",
+                  "interrupted",
+                  "cancelled",
+                  "crashed",
+                  "unreachable"
+                ]
+              },
+              "charge_event_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_class": {
+                "const": "legacy"
+              },
+              "dispatch_id_classification": {
+                "const": "UNKNOWN"
+              },
+              "attempt_kind_classification": {
+                "const": "UNKNOWN"
+              },
+              "failure_fingerprint_classification": {
+                "const": "UNKNOWN"
+              },
+              "legacy_projection_ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "legacy_projection_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "source_event_refs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "event_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "event_type": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "ledger_line": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "event_sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "task_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "payload_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "payload_sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "dispatch_id": {
+                      "const": "UNKNOWN"
+                    },
+                    "attempt_kind": {
+                      "const": "UNKNOWN"
+                    },
+                    "failure_fingerprint_id": {
+                      "const": "UNKNOWN"
+                    }
+                  },
+                  "required": [
+                    "event_id",
+                    "event_type",
+                    "ledger_line",
+                    "event_sha256",
+                    "project_id",
+                    "task_id",
+                    "run_id",
+                    "payload_ref",
+                    "payload_sha256",
+                    "created_at",
+                    "dispatch_id",
+                    "attempt_kind",
+                    "failure_fingerprint_id"
+                  ]
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "run_id",
+              "task_id",
+              "lineage_root_task_id",
+              "terminal_disposition",
+              "charge_event_id",
+              "source_class",
+              "dispatch_id_classification",
+              "attempt_kind_classification",
+              "failure_fingerprint_classification",
+              "legacy_projection_ref",
+              "legacy_projection_sha256",
+              "source_event_refs"
+            ]
+          }
+        ]
+      },
+      "minItems": 0
+    },
+    "derived_counts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lineage_root_task_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "failure_fingerprint_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^ff-v0\\.1:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "automatic_rework_charges": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "const": "UNKNOWN"
+              }
+            ]
+          },
+          "owner_granted_recovery_charges": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "all_worker_charges": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "lineage_root_task_id",
+          "failure_fingerprint_id",
+          "automatic_rework_charges",
+          "owner_granted_recovery_charges",
+          "all_worker_charges"
+        ]
+      },
+      "minItems": 0
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "schema_version",
+    "authority_id",
+    "authority_digest",
+    "project_id",
+    "root_binding",
+    "source_contract_version",
+    "source_paths",
+    "snapshot_binding",
+    "source_watermark",
+    "legacy_transition_binding",
+    "lineages",
+    "fingerprints",
+    "runs",
+    "derived_counts",
+    "created_at"
+  ]
+}

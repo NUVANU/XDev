@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/project-model/0.1/requirement-registry.schema.json",
+  "title": "XDev Requirement Registry 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "requirements", "acceptance_criteria"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "project_id": { "$ref": "common.schema.json#/$defs/projectId" },
+    "requirements": { "type": "array", "minItems": 1, "items": { "$ref": "requirement.schema.json" } },
+    "acceptance_criteria": { "type": "array", "items": { "$ref": "acceptance-criterion.schema.json" } }
+  }
+}

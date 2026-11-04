@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/project-model/0.1/project-state.schema.json",
+  "title": "XDev Project State 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "name", "owner_policy", "project_state", "current_milestone_id", "approved_design_refs", "provider", "flow", "git", "readiness", "active_task_ids", "last_verified_milestone_id", "last_verification_report_ref", "owner_gate_ids", "diagnostics", "self_improvement", "updated_at"],
+  "oneOf": [
+    {
+      "properties": {
+        "last_verified_milestone_id": { "type": "null" },
+        "last_verification_report_ref": { "type": "null" }
+      }
+    },
+    {
+      "properties": {
+        "last_verified_milestone_id": { "$ref": "common.schema.json#/$defs/milestoneId" },
+        "last_verification_report_ref": { "$ref": "common.schema.json#/$defs/relativePath" }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "project_id": { "$ref": "common.schema.json#/$defs/projectId" },
+    "name": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "owner_policy": { "enum": ["quality_first", "balanced", "economy"] },
+    "project_state": { "enum": ["PLANNING", "APPROVED", "EXECUTING", "WORKSTREAMS_VERIFIED", "PROJECT_INTEGRATION", "FINAL_SPEC_CHECK", "OWNER_REVIEW", "DELIVERED", "BLOCKED"] },
+    "current_milestone_id": { "$ref": "common.schema.json#/$defs/milestoneId" },
+    "approved_design_refs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/relativePath" } },
+    "provider": { "const": "local" },
+    "flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "reason"],
+      "properties": {
+        "type": { "enum": ["quick", "full_governance"] },
+        "reason": { "$ref": "common.schema.json#/$defs/nonEmptyText" }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["initialized", "default_branch", "head"],
+      "properties": {
+        "initialized": { "type": "boolean" },
+        "default_branch": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+        "head": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+        "head_semantics": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+        "probe_note": { "$ref": "common.schema.json#/$defs/nonEmptyText" }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "checked_at"],
+      "properties": {
+        "status": { "enum": ["PASS", "FAIL", "NOT_RUN"] },
+        "checked_at": { "type": "string", "format": "date-time" },
+        "evidence_ref": { "$ref": "common.schema.json#/$defs/nonEmptyText" }
+      }
+    },
+    "active_task_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/taskId" } },
+    "last_verified_milestone_id": { "anyOf": [{ "type": "null" }, { "$ref": "common.schema.json#/$defs/milestoneId" }] },
+    "last_verification_report_ref": { "anyOf": [{ "type": "null" }, { "$ref": "common.schema.json#/$defs/relativePath" }] },
+    "owner_gate_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/ownerGateId" } },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "collection", "external_transmission", "owner_feedback_optional", "diagnostic_bundle_refs", "improvement_report_refs"],
+      "properties": {
+        "provider": { "const": "local" },
+        "collection": { "const": "structured_minimum" },
+        "external_transmission": { "const": false },
+        "owner_feedback_optional": { "type": "boolean" },
+        "diagnostic_bundle_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/relativePath" } },
+        "improvement_report_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/relativePath" } }
+      }
+    },
+    "self_improvement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime_adaptation", "product_evolution", "silent_self_modification", "self_review", "automatic_install_or_publish", "candidate_refs"],
+      "properties": {
+        "runtime_adaptation": { "const": "approved_rules_only" },
+        "product_evolution": { "const": "candidate_only" },
+        "silent_self_modification": { "const": false },
+        "self_review": { "const": false },
+        "automatic_install_or_publish": { "const": false },
+        "candidate_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/relativePath" } }
+      }
+    },
+    "updated_at": { "type": "string", "format": "date-time" }
+  }
+}

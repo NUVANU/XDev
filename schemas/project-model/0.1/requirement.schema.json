@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/project-model/0.1/requirement.schema.json",
+  "title": "XDev Requirement 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "requirement_id", "source_refs", "statement", "status", "acceptance_criteria_ids", "milestone_ids", "task_ids", "code_refs", "evidence_refs", "delivery_status"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "requirement_id": { "$ref": "common.schema.json#/$defs/requirementId" },
+    "source_refs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/nonEmptyText" } },
+    "statement": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "status": { "enum": ["draft", "approved", "blocked", "superseded", "delivered"] },
+    "acceptance_criteria_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/acceptanceCriterionId" } },
+    "milestone_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/milestoneId" } },
+    "task_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/taskId" } },
+    "code_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/relativePath" } },
+    "evidence_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/nonEmptyText" } },
+    "delivery_status": { "enum": ["not_started", "in_progress", "blocked", "verified", "not_delivered"] }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/project-model/0.2/project-model-container.schema.json",
+  "title": "XDev Versioned Project Model Container 0.2",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "artifact_kind", "artifact"],
+      "properties": { "schema_version": { "const": "0.2" }, "artifact_kind": { "const": "requirement_registry" }, "artifact": { "$ref": "requirement-registry.schema.json" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "artifact_kind", "artifact"],
+      "properties": { "schema_version": { "const": "0.2" }, "artifact_kind": { "const": "milestone" }, "artifact": { "$ref": "milestone.schema.json" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "artifact_kind", "artifact"],
+      "properties": { "schema_version": { "const": "0.2" }, "artifact_kind": { "const": "task_contract" }, "artifact": { "$ref": "task-contract.schema.json" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "artifact_kind", "artifact"],
+      "properties": { "schema_version": { "const": "0.2" }, "artifact_kind": { "const": "owner_gate" }, "artifact": { "$ref": "owner-gate.schema.json" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "artifact_kind", "artifact"],
+      "properties": { "schema_version": { "const": "0.2" }, "artifact_kind": { "const": "project_state" }, "artifact": { "$ref": "project-state.schema.json" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "artifact_kind", "artifact"],
+      "properties": { "schema_version": { "const": "0.2" }, "artifact_kind": { "const": "project_model_bundle" }, "artifact": { "$ref": "project-model-bundle.schema.json" } }
+    }
+  ]
+}

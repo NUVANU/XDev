@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/execution-delivery/0.1/closure-manifest.schema.json",
+  "title": "XDev Closure Manifest 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "closure_id",
+    "snapshot_id",
+    "snapshot_digest",
+    "gate_run_id",
+    "gate_result",
+    "report_refs",
+    "evidence_refs",
+    "closed_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "closure_id": {
+      "$ref": "common.schema.json#/$defs/closureId"
+    },
+    "snapshot_id": {
+      "$ref": "common.schema.json#/$defs/snapshotId"
+    },
+    "snapshot_digest": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "gate_run_id": {
+      "$ref": "common.schema.json#/$defs/runId"
+    },
+    "gate_result": {
+      "enum": [
+        "PASS",
+        "FAIL"
+      ]
+    },
+    "report_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/artifactRef"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/artifactRef"
+      },
+      "uniqueItems": true
+    },
+    "closed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

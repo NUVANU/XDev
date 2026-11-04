@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/project-model/0.2/project-model-bundle.schema.json",
+  "title": "XDev Project Model Bundle 0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "requirement_registry", "milestones", "tasks", "owner_gates", "project_state", "delivery_profile_decision"],
+  "properties": {
+    "schema_version": { "const": "0.2" },
+    "requirement_registry": { "$ref": "requirement-registry.schema.json" },
+    "milestones": { "type": "array", "minItems": 1, "items": { "$ref": "milestone.schema.json" } },
+    "tasks": { "type": "array", "minItems": 1, "items": { "$ref": "task-contract.schema.json" } },
+    "owner_gates": { "type": "array", "items": { "$ref": "owner-gate.schema.json" } },
+    "project_state": { "$ref": "project-state.schema.json" },
+    "delivery_profile_decision": { "$ref": "https://xdev.local/schemas/delivery/0.1/delivery-profile-decision.schema.json" },
+    "delivery_outcome": { "$ref": "https://xdev.local/schemas/delivery/0.1/delivery-outcome.schema.json" },
+    "delivery_report": { "$ref": "https://xdev.local/schemas/delivery/0.1/delivery-report.schema.json" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "delivery_outcome": true }, "required": ["delivery_outcome"] },
+      "then": { "properties": { "project_state": { "type": "object", "properties": { "delivery_outcome_ref": true }, "required": ["delivery_outcome_ref"] } } },
+      "else": { "properties": { "project_state": { "type": "object", "not": { "type": "object", "properties": { "delivery_outcome_ref": true }, "required": ["delivery_outcome_ref"] } } } }
+    },
+    {
+      "if": { "properties": { "delivery_report": true }, "required": ["delivery_report"] },
+      "then": {
+        "required": ["delivery_outcome"],
+        "properties": { "delivery_outcome": true, "project_state": { "type": "object", "properties": { "delivery_report_ref": true }, "required": ["delivery_report_ref"] } }
+      },
+      "else": { "properties": { "project_state": { "type": "object", "not": { "type": "object", "properties": { "delivery_report_ref": true }, "required": ["delivery_report_ref"] } } } }
+    },
+    {
+      "if": { "properties": { "delivery_profile_decision": { "type": "object", "properties": { "effective_profile": { "const": "prototype" } }, "required": ["effective_profile"] } }, "required": ["delivery_profile_decision"] },
+      "then": {
+        "properties": {
+          "tasks": { "type": "array", "not": { "contains": { "type": "object", "properties": { "state": { "const": "TASK_VERIFIED" } }, "required": ["state"] } } },
+          "milestones": { "type": "array", "not": { "contains": { "type": "object", "properties": { "status": { "const": "VERIFIED" } }, "required": ["status"] } } },
+          "requirement_registry": {
+            "type": "object",
+            "properties": {
+              "requirements": { "type": "array", "not": { "contains": { "type": "object", "properties": { "delivery_status": { "const": "verified" } }, "required": ["delivery_status"] } } },
+              "acceptance_criteria": { "type": "array", "not": { "contains": { "type": "object", "properties": { "status": { "const": "verified" } }, "required": ["status"] } } }
+            }
+          },
+          "project_state": { "type": "object", "properties": { "project_state": { "not": { "const": "DELIVERED" } } } },
+          "delivery_outcome": { "type": "object", "properties": { "status": { "enum": ["PROTOTYPE_UNVERIFIED", "REWORK", "BLOCKED"] } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "delivery_profile_decision": { "type": "object", "properties": { "effective_profile": { "enum": ["quick_verified", "full_governance"] } }, "required": ["effective_profile"] } }, "required": ["delivery_profile_decision"] },
+      "then": {
+        "properties": {
+          "tasks": { "type": "array", "not": { "contains": { "type": "object", "properties": { "state": { "const": "PROTOTYPE_READY" } }, "required": ["state"] } } },
+          "milestones": { "type": "array", "not": { "contains": { "type": "object", "properties": { "status": { "const": "PROTOTYPE_READY" } }, "required": ["status"] } } },
+          "requirement_registry": {
+            "type": "object",
+            "properties": {
+              "requirements": { "type": "array", "not": { "contains": { "type": "object", "properties": { "delivery_status": { "const": "prototype_unverified" } }, "required": ["delivery_status"] } } }
+            }
+          },
+          "project_state": { "type": "object", "properties": { "project_state": { "not": { "const": "PROTOTYPE_DELIVERED" } } } },
+          "delivery_outcome": { "type": "object", "properties": { "status": { "enum": ["VERIFIED", "REWORK", "BLOCKED"] } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "project_state": { "type": "object", "properties": { "project_state": { "const": "PROTOTYPE_DELIVERED" } }, "required": ["project_state"] } }, "required": ["project_state"] },
+      "then": {
+        "required": ["delivery_outcome", "delivery_report"],
+        "properties": {
+          "tasks": { "type": "array", "contains": { "type": "object", "properties": { "state": { "const": "PROTOTYPE_READY" } }, "required": ["state"] }, "not": { "contains": { "type": "object", "properties": { "state": { "const": "TASK_VERIFIED" } }, "required": ["state"] } } },
+          "milestones": { "type": "array", "contains": { "type": "object", "properties": { "status": { "const": "PROTOTYPE_READY" } }, "required": ["status"] }, "not": { "contains": { "type": "object", "properties": { "status": { "const": "VERIFIED" } }, "required": ["status"] } } },
+          "requirement_registry": { "type": "object", "properties": { "requirements": { "type": "array", "contains": { "type": "object", "properties": { "delivery_status": { "const": "prototype_unverified" } }, "required": ["delivery_status"] }, "not": { "contains": { "type": "object", "properties": { "delivery_status": { "const": "verified" } }, "required": ["delivery_status"] } } } } },
+          "delivery_outcome": { "type": "object", "properties": { "status": { "const": "PROTOTYPE_UNVERIFIED" } } },
+          "delivery_report": { "type": "object", "properties": { "project_status": { "const": "PROTOTYPE_DELIVERED" }, "assurance_label": { "const": "UNVERIFIED" } } }
+        }
+      }
+    }
+  ]
+}

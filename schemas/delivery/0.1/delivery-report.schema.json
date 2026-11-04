@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/delivery/0.1/delivery-report.schema.json",
+  "title": "XDev Delivery Report 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "delivery_report_id", "project_id", "profile_decision", "delivery_outcome", "project_status", "assurance_label", "limitations", "created_at"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "delivery_report_id": { "$ref": "common.schema.json#/$defs/deliveryReportId" },
+    "project_id": { "$ref": "common.schema.json#/$defs/projectId" },
+    "profile_decision": { "$ref": "delivery-profile-decision.schema.json" },
+    "delivery_outcome": { "$ref": "delivery-outcome.schema.json" },
+    "project_status": { "enum": ["PROTOTYPE_DELIVERED", "DELIVERED", "REWORK", "BLOCKED"] },
+    "assurance_label": { "enum": ["UNVERIFIED", "VERIFIED", "NOT_DELIVERED"] },
+    "limitations": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/nonEmptyText" } },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "profile_decision": { "type": "object", "properties": { "effective_profile": { "const": "prototype" } }, "required": ["effective_profile"] } }, "required": ["profile_decision"] },
+      "then": {
+        "properties": {
+          "delivery_outcome": { "type": "object", "properties": { "status": { "enum": ["PROTOTYPE_UNVERIFIED", "REWORK", "BLOCKED"] } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "profile_decision": { "type": "object", "properties": { "effective_profile": { "enum": ["quick_verified", "full_governance"] } }, "required": ["effective_profile"] } }, "required": ["profile_decision"] },
+      "then": {
+        "properties": {
+          "delivery_outcome": { "type": "object", "properties": { "status": { "enum": ["VERIFIED", "REWORK", "BLOCKED"] } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "delivery_outcome": { "type": "object", "properties": { "status": { "const": "PROTOTYPE_UNVERIFIED" } }, "required": ["status"] } }, "required": ["delivery_outcome"] },
+      "then": {
+        "properties": {
+          "project_status": { "const": "PROTOTYPE_DELIVERED" },
+          "assurance_label": { "const": "UNVERIFIED" },
+          "limitations": { "type": "array", "minItems": 1 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "delivery_outcome": { "type": "object", "properties": { "status": { "const": "VERIFIED" } }, "required": ["status"] } }, "required": ["delivery_outcome"] },
+      "then": { "properties": { "project_status": { "const": "DELIVERED" }, "assurance_label": { "const": "VERIFIED" } } }
+    },
+    {
+      "if": { "properties": { "delivery_outcome": { "type": "object", "properties": { "status": { "enum": ["REWORK", "BLOCKED"] } }, "required": ["status"] } }, "required": ["delivery_outcome"] },
+      "then": { "properties": { "project_status": { "enum": ["REWORK", "BLOCKED"] }, "assurance_label": { "const": "NOT_DELIVERED" } } }
+    }
+  ]
+}

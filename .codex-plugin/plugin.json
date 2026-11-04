@@ -1,0 +1,34 @@
+{
+  "name": "xdev",
+  "version": "0.0.12+local.r10.20261104",
+  "description": "Local D2 supervised development with optional XMem V2.1 engineering memory and explicit project binding.",
+  "author": {
+    "name": "XDev"
+  },
+  "license": "MPL-2.0",
+  "keywords": [
+    "codex",
+    "development",
+    "governance",
+    "verification"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "XDev Local",
+    "shortDescription": "D2 local supervised development",
+    "longDescription": "Install without a project, then explicitly bind approved work for preparation, preflight, bounded execution and independent Review and QA. Optional XMem V2.1 engineering context, public-outcome capture and read-only reconciliation require separate configuration. Release declarations, installed bytes and actual host adoption are checked separately.",
+    "developerName": "XDev",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use XDev Local to inspect the current project binding and available permissions.",
+      "Help prepare this task and preflight its approved inputs before bounded development.",
+      "Show the current-version status and quality result of this XDev Job.",
+      "Use explicitly configured XMem V2.1 engineering memory for this approved task while preserving full conditions, sources and uncertainty."
+    ]
+  }
+}

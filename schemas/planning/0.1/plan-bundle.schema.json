@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/planning/0.1/plan-bundle.schema.json",
+  "title": "XDev Codex-authored Plan Bundle 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "project_id", "architecture", "requirement_registry", "milestones", "tasks", "dag", "delivery_profile_decision", "created_at"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "plan_id": { "$ref": "common.schema.json#/$defs/planId" },
+    "project_id": { "$ref": "common.schema.json#/$defs/projectId" },
+    "architecture": { "$ref": "architecture-proposal.schema.json" },
+    "requirement_registry": {
+      "allOf": [
+        { "$ref": "https://xdev.local/schemas/project-model/0.2/requirement-registry.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "requirements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "status": { "enum": ["draft", "approved", "blocked", "superseded"] },
+                  "delivery_status": { "enum": ["not_started", "in_progress", "blocked", "not_delivered"] }
+                }
+              }
+            },
+            "acceptance_criteria": {
+              "type": "array",
+              "items": { "type": "object", "properties": { "status": { "enum": ["draft", "approved", "blocked", "superseded"] } } }
+            }
+          }
+        }
+      ]
+    },
+    "milestones": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "allOf": [
+          { "$ref": "https://xdev.local/schemas/project-model/0.2/milestone.schema.json" },
+          { "type": "object", "properties": { "status": { "const": "PLANNED" } } }
+        ]
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "allOf": [
+          { "$ref": "https://xdev.local/schemas/project-model/0.2/task-contract.schema.json" },
+          { "type": "object", "properties": { "state": { "const": "PLANNED" } } }
+        ]
+      }
+    },
+    "dag": { "$ref": "plan-dag.schema.json" },
+    "delivery_profile_decision": { "$ref": "https://xdev.local/schemas/delivery/0.1/delivery-profile-decision.schema.json" },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

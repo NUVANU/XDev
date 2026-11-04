@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/planning/0.1/retry-budget.schema.json",
+  "title": "XDev Same-Failure Retry Budget 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "failure_fingerprint", "attempts", "max_attempts", "next_action"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+    "failure_fingerprint": { "$ref": "common.schema.json#/$defs/failureFingerprintId" },
+    "attempts": { "type": "integer", "minimum": 0, "maximum": 2 },
+    "max_attempts": { "const": 2 },
+    "next_action": { "enum": ["retry", "replan", "reassign", "blocked", "owner_gate"] }
+  },
+  "allOf": [{
+    "if": { "properties": { "attempts": { "const": 2 } }, "required": ["attempts"] },
+    "then": { "properties": { "next_action": { "enum": ["replan", "reassign", "blocked", "owner_gate"] } } }
+  }]
+}

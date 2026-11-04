@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/delivery/0.1/write-lease.schema.json",
+  "title": "XDev Write Lease 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "lease_id", "project_id", "worktree_id", "worktree_identity_version", "canonical_real_path", "filesystem_identity", "fencing_token", "holder_run_id", "allowed_scope", "acquired_at", "expires_at", "status"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "lease_id": { "type": "string", "pattern": "^(?:WL-[A-Z0-9]+(?:-[A-Z0-9]+)+|wl-v0\\.1:[0-9a-f]{64})$" },
+    "project_id": { "$ref": "common.schema.json#/$defs/projectId" },
+    "worktree_id": { "type": "string", "pattern": "^wt-v0\\.1:[0-9a-f]{64}$" },
+    "worktree_identity_version": { "const": "filesystem-v0.1" },
+    "canonical_real_path": { "$ref": "common.schema.json#/$defs/nonEmptyText" },
+    "filesystem_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "volume_id", "file_id"],
+      "properties": {
+        "platform": { "enum": ["win32", "linux", "darwin"] },
+        "volume_id": { "type": "string", "pattern": "^(?:0|[1-9][0-9]*)$" },
+        "file_id": { "type": "string", "pattern": "^[1-9][0-9]*$" }
+      }
+    },
+    "fencing_token": { "type": "string", "pattern": "^ft-v0\\.1:[0-9a-f]{64}$" },
+    "holder_run_id": { "$ref": "common.schema.json#/$defs/runId" },
+    "allowed_scope": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/canonicalRepoPath" } },
+    "acquired_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "status": { "enum": ["active", "released", "expired", "orphaned"] }
+  }
+}

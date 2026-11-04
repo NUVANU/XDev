@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xdev.local/schemas/planning/0.1/common.schema.json",
+  "$defs": {
+    "nonEmptyText": { "type": "string", "minLength": 1, "maxLength": 10000, "pattern": "\\S" },
+    "projectId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
+    "planId": { "type": "string", "pattern": "^PLAN-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "architectureProposalId": { "type": "string", "pattern": "^ARCH-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "taskId": { "type": "string", "pattern": "^M(?:0|[1-9][0-9]*)-T[0-9]{3,}$" },
+    "requirementId": { "type": "string", "pattern": "^REQ-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "relativePath": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:)(?!/)(?!\\\\)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "runId": { "type": "string", "pattern": "^RUN-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "checkpointPolicyId": { "type": "string", "pattern": "^CP-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "writeLeaseId": { "type": "string", "pattern": "^WL-[A-Z0-9]+(?:-[A-Z0-9]+)+$" },
+    "failureFingerprintId": { "type": "string", "pattern": "^ff-v0\\.1:[0-9a-f]{64}$" },
+    "taskKind": { "enum": ["implementation", "checkpoint_control", "review_control", "verification_control"] },
+    "repositoryAccess": { "enum": ["read_only", "write_scoped"] },
+    "criticalBoundary": { "enum": ["security", "state_migration", "evidence", "permission", "privacy", "payment", "authentication", "write_scope", "public_schema", "plan_validation", "readiness"] }
+  }
+}
