@@ -2,6 +2,8 @@
 
 XDev 在 Codex 中按用户批准的项目、任务版本和改动范围准备及执行开发，并记录 Review、QA 和交付结果。本源码对应 X Suite 联合验收中的 R10 执行代码，以及保留现有材料准备工具的本地插件外壳。
 
+当前社区版为 **V0.1**（软件包版本 `0.1.0`）。
+
 ## 本地使用
 
 使用 Node 24.20.0、pnpm 11.25.0 和 npm 11.19.0。在仓库根目录执行 `pnpm install --frozen-lockfile --ignore-scripts`，再到 `mcp` 目录执行 `npm ci --ignore-scripts`。回到根目录后可运行 `npm run typecheck`。

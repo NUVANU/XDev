@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "xdev",
-  "version": "0.0.12+local.r10.20261104",
+  "version": "0.1.0",
   "description": "Local D2 supervised development with optional XMem V2.1 engineering memory and explicit project binding.",
   "author": {
     "name": "XDev"
