@@ -425,7 +425,10 @@ export function recordSupervised(s: Subject,id: JobId,source: string) {
       const saved=latest(store,fresh.job,'xdev-supervised-review-1');
       if(saved){original(saved.value);need(saved.value.passed===true&&r.scope_pass===true&&independentDecision(r,c)&&t.state==='REVIEWING','SUPERVISED_REVIEW_ALREADY_RECORDED');commands=[{kind:'TASK_STATE',task_id:t.task_id,state:'TESTING'}];}
       else{
-        need(t.state==='REVIEWING','SUPERVISED_REVIEW_ALREADY_RECORDED');const passed=r.scope_pass===true&&independentDecision(r,c),value={format:'xdev-supervised-review-1',record:r,source:sourceRef,manifest_sha256:digest(current),passed},ref=store.persistEvidence(value);
+        need(t.state==='REVIEWING','SUPERVISED_REVIEW_ALREADY_RECORDED');
+        const passed=independentDecision(r,c)&&r.scope_pass===true;
+        const value={format:'xdev-supervised-review-1',record:r,source:sourceRef,manifest_sha256:digest(current),passed};
+        const ref=store.persistEvidence(value);
         commands=[{kind:'VERIFICATION',task_id:t.task_id,receipt:{decision_ref:ref,authority_ref:t.contract_ref,subject_generation:t.generation,workspace_head:t.workspace.observed_head,outcome:passed?'PARTIALLY_VERIFIED':'STALE',checks:[{requirement:'review',passed,evidence_refs:passed?[ref]:[]}]}}];
         if(passed)commands.push({kind:'TASK_STATE',task_id:t.task_id,state:'TESTING'});
       }
