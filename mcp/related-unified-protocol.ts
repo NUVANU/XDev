@@ -6,7 +6,7 @@ import { parseD1UniqueJson } from '../src/job-runtime/contracts.ts';
 import { selectMemoryBoundary, selectMemoryBoundaryWithDeployment, boundaryOptions } from '../src/host-surface/project-memory-boundary.ts';
 import { bytes, exact, hash, loadConfigWithDeployment, noLinks, refShape, within } from './configure.ts';
 import type { FileRef, LocalConfig, RelatedConfig } from './configure.ts';
-import { RELATED_BUILDS, UNIFIED_BUILD, E7_NATIVE_BUILD, E7_NODE_SHA256, nativeJointQuery, sdkCompanionContract, sdkOrdinaryToolCount } from './sdk-builds.ts';
+import { RELATED_BUILDS, isUnifiedBuild, E7_NATIVE_BUILD, E7_NODE_SHA256, nativeJointQuery, sdkCompanionContract, sdkOrdinaryToolCount } from './sdk-builds.ts';
 // Private wire implementation: the external envelope retains the old layers/codes.
 export class RelatedProtocolError extends Error {
  layer:string;code:string;diagnostic:Record<string,unknown>;
@@ -17,7 +17,7 @@ export function memoryCheck(value:unknown,code:string):asserts value {if(!value)
 const check:typeof memoryCheck=memoryCheck;
 export function memoryJson(text:string):any {try{return parseD1UniqueJson(text);}catch{throw new MemoryError('MALFORMED_RESPONSE','MEMORY_INVALID_JSON',{raw_sha256:hash(text)});}}
 /** Eligibility only selects between two fixed private children; it grants no access. */
-export function isUnifiedPlainRelated(c:LocalConfig){const m=c.memory_bridge,r=m?.related;return m!==undefined&&r?.enabled===true&&(r.build_id===UNIFIED_BUILD||r.build_id===E7_NATIVE_BUILD)&&m.current_facts===undefined&&m.dependencies?.related===undefined;}
+export function isUnifiedPlainRelated(c:LocalConfig){const m=c.memory_bridge,r=m?.related;return m!==undefined&&r?.enabled===true&&(isUnifiedBuild(r.build_id)||r.build_id===E7_NATIVE_BUILD)&&m.current_facts===undefined&&m.dependencies?.related===undefined;}
 type Enabled=Extract<RelatedConfig,{enabled:true}>;
 type Local=ReturnType<typeof import('./configure.ts').loadConfig>;
 const same=(a:unknown,b:unknown)=>canonical(a)===canonical(b);

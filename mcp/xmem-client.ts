@@ -11,7 +11,7 @@ import { selectMemoryBoundary, selectMemoryBoundaryWithDeployment, boundaryHealt
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readdirSync, lstatSync } from 'node:fs';
-import { UNIFIED_BUILD, E7_NATIVE_BUILD, E7_NODE_SHA256, SDK_MEMBERS, RELATED_BUILDS, nativeOrdinaryAllowed } from './sdk-builds.ts';
+import { isUnifiedBuild, E7_NATIVE_BUILD, E7_NODE_SHA256, SDK_MEMBERS, RELATED_BUILDS, nativeOrdinaryAllowed } from './sdk-builds.ts';
 import { inspectSupervisedInput } from '../src/host-surface/supervised-quality.ts';
 import { createInputReader } from './input-reader.ts';
 
@@ -38,7 +38,7 @@ export function decodeXmem(raw:any,limit:number):any {
   return parsed.value;
 }
 export function pinTools(tools:any,build?:string):string {
-  const unified=build!==undefined&&(build===UNIFIED_BUILD||build===E7_NATIVE_BUILD),namesExpected=unified?COMPANION3_NAMES:COMPANION_NAMES;
+  const unified=build!==undefined&&(isUnifiedBuild(build)||build===E7_NATIVE_BUILD),namesExpected=unified?COMPANION3_NAMES:COMPANION_NAMES;
   memoryCheck(Array.isArray(tools)&&tools.length===namesExpected.length,unified?'MEMORY_NINE_TOOLS_REQUIRED':'MEMORY_SEVEN_TOOLS_REQUIRED');
   memoryCheck(tools.every(t=>t&&typeof t==='object'&&typeof t.name==='string'),'MEMORY_TOOL_SCHEMA_INVALID');
   const names=tools.map(t=>t?.name).sort();memoryCheck(canonical(names)===canonical([...namesExpected].sort()),'MEMORY_TOOL_SET_CHANGED');
@@ -66,7 +66,7 @@ export function approvedDependencies(c:LocalConfig,channel:'ordinary'|'engineeri
   verifyMemoryPinsAtBoundary(c,{kind:'ordinary'});
  }else{
   const selected=selectMemoryBoundary(c);
-  memoryCheck(selected?.boundary.sdk_build_id===UNIFIED_BUILD&&verifyMemoryPins(c).build===UNIFIED_BUILD,
+  memoryCheck(isUnifiedBuild(selected?.boundary.sdk_build_id)&&verifyMemoryPins(c).build===selected?.boundary.sdk_build_id,
    'MEMORY_DEPENDENCY_BUILD_OR_PHYSICAL_UNSUPPORTED');
  }
  const r=v.registration;exact(r,['task_ref','task_version','role','expected_scope','relation_ids',...(r.allowed_source_ids===undefined?[]:['allowed_source_ids']),...(channel==='related'?['target_scope','expected_sharing_policy_hash']:[])]);
@@ -96,7 +96,7 @@ export function checkDependencyLifecycle(c:LocalConfig,channel:'ordinary'|'engin
 export function checkOrdinarySdkStatus(c:LocalConfig,raw:any){
  memoryCheck(raw?.ok===true&&raw.value&&typeof raw.value==='object','MEMORY_VIEW_STATUS_ENVELOPE');const v=raw.value,m=c.memory_bridge!,selected=selectMemoryBoundary(c),p=v.policy,l=v.storage_location,rt=v.runtime;
  const selectedBuild=selected?.boundary.sdk_build_id;
- memoryCheck(selected&&(selectedBuild===UNIFIED_BUILD||nativeOrdinaryAllowed(c,selectedBuild))&&v.project_root===c.project_root&&v.project_id===m.project_id&&v.configured===true&&v.automatic_hooks===false&&v.policy_hash===m.policy_hash&&hash(canonical(p))===m.policy_hash&&p?.schema_version===1&&p.mode==='SEMI_AUTO'&&p.enabled===true&&p.workspace_id===m.workspace_id&&p.default_role==='developer'&&canonical(p.allowed_roles)===canonical(['developer'])&&Number.isSafeInteger(p.payload_budget_bytes)&&p.payload_budget_bytes>=1024&&p.payload_budget_bytes<=m.limits.payload_bytes,'MEMORY_VIEW_STATUS_POLICY');
+ memoryCheck(selected&&(isUnifiedBuild(selectedBuild)||nativeOrdinaryAllowed(c,selectedBuild))&&v.project_root===c.project_root&&v.project_id===m.project_id&&v.configured===true&&v.automatic_hooks===false&&v.policy_hash===m.policy_hash&&hash(canonical(p))===m.policy_hash&&p?.schema_version===1&&p.mode==='SEMI_AUTO'&&p.enabled===true&&p.workspace_id===m.workspace_id&&p.default_role==='developer'&&canonical(p.allowed_roles)===canonical(['developer'])&&Number.isSafeInteger(p.payload_budget_bytes)&&p.payload_budget_bytes>=1024&&p.payload_budget_bytes<=m.limits.payload_bytes,'MEMORY_VIEW_STATUS_POLICY');
  memoryCheck(rt?.build_id===selectedBuild&&rt.contract_version==='xmem-companion/3'&&rt.profile==='sdk'&&rt.identity_observation==='ON_DISK_AT_STATUS_CALL_NOT_LOADED_MODULE_ATTESTATION'&&rt.capabilities?.ordinary_tool_count===9&&rt.capabilities.authenticated_identity===false,'MEMORY_VIEW_STATUS_BUILD');
  memoryCheck(l?.configured===true&&l.mode===selected.boundary.mode&&l.storage_root===m.storage_root&&l.location_hash===m.location_hash&&l.custom_identity_verified===(selected.boundary.mode==='CUSTOM_LOCAL'),'MEMORY_VIEW_STATUS_LOCATION');
 }
@@ -117,7 +117,7 @@ export function standaloneDependencyPeer(local:ReturnType<typeof import('./confi
   memoryCheck(Date.now()<deadline,'MEMORY_VIEW_TOTAL_DEADLINE');
  };
  return{call:async(name,input={})=>{memoryCheck(calls===0&&['xmem_session_start','xmem_session_checkpoint'].includes(name),'MEMORY_VIEW_SINGLE_OPERATION');calls++;guard();const child=fileURLToPath(new URL('./standalone-read-child.ts',import.meta.url)),childHash=hash(bytes(child)),started=Date.now();const out=spawnSync(m.node.path,['--experimental-strip-types',child],{cwd:c.project_root,windowsHide:true,shell:false,timeout:Math.max(1,deadline-Date.now()),maxBuffer:m.limits.response_bytes,env:getDefaultEnvironment(),input:Buffer.from(JSON.stringify({config_path:local.configPath,config_sha256:local.configHash,input,deadline_unix_ms:deadline,action:name==='xmem_session_start'?'recall':'checkpoint'})),encoding:'buffer'});
-  diagnostic={...diagnostic,pid:out.pid??null,exit_code:out.status,signal:out.signal,error_code:(out.error as NodeJS.ErrnoException | undefined)?.code??null,elapsed_ms:Date.now()-started,stdout_bytes:out.stdout?.length??0,stdout_sha256:hash(out.stdout??Buffer.alloc(0)),stderr_bytes:out.stderr?.length??0,stderr_sha256:hash(out.stderr??Buffer.alloc(0)),sdk_build:UNIFIED_BUILD,child_sha256:childHash,global_descendant_closure:'NOT_CLAIMED'};
+  diagnostic={...diagnostic,pid:out.pid??null,exit_code:out.status,signal:out.signal,error_code:(out.error as NodeJS.ErrnoException | undefined)?.code??null,elapsed_ms:Date.now()-started,stdout_bytes:out.stdout?.length??0,stdout_sha256:hash(out.stdout??Buffer.alloc(0)),stderr_bytes:out.stderr?.length??0,stderr_sha256:hash(out.stderr??Buffer.alloc(0)),sdk_build:selectMemoryBoundary(c)?.boundary.sdk_build_id,child_sha256:childHash,global_descendant_closure:'NOT_CLAIMED'};
   memoryCheck(!out.error&&!out.signal&&out.status===0&&out.stdout.length+out.stderr.length<=m.limits.response_bytes&&out.stderr.length<=m.limits.stderr_bytes&&hash(bytes(child))===childHash,'MEMORY_VIEW_CHILD_UNKNOWN');const value=memoryJson(out.stdout.toString('utf8'));exact(value,['format','before','result','after','dependency_lifecycle','sdk_path','derived_state_writes']);memoryCheck(value.format==='xdev-standalone-view-child-1'&&value.sdk_path==='SDK_WITH_COMPANION_SAFE_VIEW'&&value.derived_state_writes===true,'MEMORY_VIEW_CHILD_ENVELOPE');checkOrdinarySdkStatus(c,value.before);checkOrdinarySdkStatus(c,value.after);guard(value);return value.result;},guard:async()=>{memoryCheck(calls===1,'MEMORY_VIEW_OPERATION_NOT_OBSERVED');guard();},close:async()=>{},diagnostic:()=>diagnostic};
 }
 export type XmemPeer={call:(name:string,input?:Record<string,unknown>)=>Promise<any>;guard:()=>Promise<void>;close:()=>Promise<void>;diagnostic:()=>Record<string,unknown>};
@@ -168,7 +168,7 @@ function verifyMemoryPinsAtBoundary(c:LocalConfig,source?:PinSource):{m:MemoryBr
   const ordinary=source?.kind==='ordinary'?selectMemoryBoundaryWithDeployment(c):null;
   if(source?.kind==='ordinary'){
     const selectedBuild=ordinary?.boundary.sdk_build_id;
-    memoryCheck(ordinary&&(selectedBuild===UNIFIED_BUILD||nativeOrdinaryAllowed(c,selectedBuild)),'MEMORY_DEPENDENCY_BUILD_OR_PHYSICAL_UNSUPPORTED');
+    memoryCheck(ordinary&&(isUnifiedBuild(selectedBuild)||nativeOrdinaryAllowed(c,selectedBuild)),'MEMORY_DEPENDENCY_BUILD_OR_PHYSICAL_UNSUPPORTED');
     memoryCheck(canonical(pinned(m.deployment))===canonical(ordinary.deployment),'MEMORY_DEPLOYMENT_DRIFT');
   }
   const closedInventory=source&&'inventory' in source?source.inventory:ordinary?.deployment;
@@ -179,10 +179,10 @@ function verifyMemoryPinsAtBoundary(c:LocalConfig,source?:PinSource):{m:MemoryBr
   const members=new Map<string,string>(inventory.files.map((f:any)=>[f?.path,f?.sha256])),names=inventory.files.filter((f:any)=>typeof f?.path==='string'&&/^dist\/src\/[^/]+\.js$/.test(f.path)).map((f:any)=>f.path.slice(9)).sort();
   const build=hash(JSON.stringify({files:names.map((name:string)=>({name,sha256:members.get('dist/src/'+name)})),package_sha256:members.get('package.json'),lock_sha256:members.get('npm-shrinkwrap.json')}));
   const seen=new Set<string>(),expected=new Map<string,{bytes:number;sha256:string}>();let covered=false;
-  for(const f of inventory.files){exact(f,['path','bytes','sha256']);memoryCheck(typeof f.path==='string'&&!f.path.includes('\\')&&f.path.split('/').every((s:string)=>s!==''&&s!=='.'&&s!=='..')&&/^[a-f0-9]{64}$/.test(f.sha256)&&Number.isSafeInteger(f.bytes)&&f.bytes>=0&&f.bytes<=2*1024*1024&&!seen.has(f.path),'MEMORY_DEPLOYMENT_MEMBER_INVALID');seen.add(f.path);const p=resolve(inventory.runtime_root,f.path);memoryCheck(within(inventory.runtime_root,p),'MEMORY_DEPLOYMENT_ESCAPE');if(build!==UNIFIED_BUILD&&!closedInventory){const b=bytes(p);memoryCheck(b.length===f.bytes&&hash(b)===f.sha256,'MEMORY_DEPLOYMENT_DRIFT');}expected.set(f.path,{bytes:f.bytes,sha256:f.sha256});if(p===m.server.path){memoryCheck(f.sha256===m.server.sha256,'MEMORY_SERVER_PIN_MISMATCH');covered=true;}}
+  for(const f of inventory.files){exact(f,['path','bytes','sha256']);memoryCheck(typeof f.path==='string'&&!f.path.includes('\\')&&f.path.split('/').every((s:string)=>s!==''&&s!=='.'&&s!=='..')&&/^[a-f0-9]{64}$/.test(f.sha256)&&Number.isSafeInteger(f.bytes)&&f.bytes>=0&&f.bytes<=2*1024*1024&&!seen.has(f.path),'MEMORY_DEPLOYMENT_MEMBER_INVALID');seen.add(f.path);const p=resolve(inventory.runtime_root,f.path);memoryCheck(within(inventory.runtime_root,p),'MEMORY_DEPLOYMENT_ESCAPE');if(!isUnifiedBuild(build)&&!closedInventory){const b=bytes(p);memoryCheck(b.length===f.bytes&&hash(b)===f.sha256,'MEMORY_DEPLOYMENT_DRIFT');}expected.set(f.path,{bytes:f.bytes,sha256:f.sha256});if(p===m.server.path){memoryCheck(f.sha256===m.server.sha256,'MEMORY_SERVER_PIN_MISMATCH');covered=true;}}
   memoryCheck(covered,'MEMORY_SERVER_NOT_IN_DEPLOYMENT');
   memoryCheck(RELATED_BUILDS.includes(build),'MEMORY_BUILD_UNSUPPORTED');
-  if(build===UNIFIED_BUILD&&!closedInventory){const counts=SDK_MEMBERS[UNIFIED_BUILD];memoryCheck(names.length===counts.js&&inventory.files.length===counts.runtime&&canonical([...members.keys()].sort())===canonical([...names.map((n:string)=>'dist/src/'+n),'package.json','npm-shrinkwrap.json'].sort()),'MEMORY_UNIFIED_DEPLOYMENT_SET');const actual:string[]=[];const walk=(dir:string)=>{noLinks(dir);for(const name of readdirSync(dir)){const p=join(dir,name),st=lstatSync(p);if(p===join(inventory.runtime_root,'node_modules')){noLinks(p);memoryCheck(lstatSync(p).isDirectory(),'MEMORY_DEPENDENCY_ROOT');continue;}if(st.isDirectory()){memoryCheck([join(inventory.runtime_root,'dist'),join(inventory.runtime_root,'dist/src')].includes(p),'MEMORY_UNIFIED_DEPLOYMENT_SET');walk(p);}else{const b=bytes(p),rel=p.slice(inventory.runtime_root.length+1).replaceAll('\\','/'),pin=expected.get(rel);memoryCheck(pin&&b.length===pin.bytes&&hash(b)===pin.sha256,'MEMORY_DEPLOYMENT_DRIFT');actual.push(rel);memoryCheck(actual.length<=counts.runtime,'MEMORY_UNIFIED_DEPLOYMENT_SET');}}};walk(inventory.runtime_root);memoryCheck(canonical(actual.sort())===canonical([...members.keys()].sort()),'MEMORY_UNIFIED_DEPLOYMENT_SET');}
+  if(isUnifiedBuild(build)&&!closedInventory){const counts=SDK_MEMBERS[build as keyof typeof SDK_MEMBERS];memoryCheck(names.length===counts.js&&inventory.files.length===counts.runtime&&canonical([...members.keys()].sort())===canonical([...names.map((n:string)=>'dist/src/'+n),'package.json','npm-shrinkwrap.json'].sort()),'MEMORY_UNIFIED_DEPLOYMENT_SET');const actual:string[]=[];const walk=(dir:string)=>{noLinks(dir);for(const name of readdirSync(dir)){const p=join(dir,name),st=lstatSync(p);if(p===join(inventory.runtime_root,'node_modules')){noLinks(p);memoryCheck(lstatSync(p).isDirectory(),'MEMORY_DEPENDENCY_ROOT');continue;}if(st.isDirectory()){memoryCheck([join(inventory.runtime_root,'dist'),join(inventory.runtime_root,'dist/src')].includes(p),'MEMORY_UNIFIED_DEPLOYMENT_SET');walk(p);}else{const b=bytes(p),rel=p.slice(inventory.runtime_root.length+1).replaceAll('\\','/'),pin=expected.get(rel);memoryCheck(pin&&b.length===pin.bytes&&hash(b)===pin.sha256,'MEMORY_DEPLOYMENT_DRIFT');actual.push(rel);memoryCheck(actual.length<=counts.runtime,'MEMORY_UNIFIED_DEPLOYMENT_SET');}}};walk(inventory.runtime_root);memoryCheck(canonical(actual.sort())===canonical([...members.keys()].sort()),'MEMORY_UNIFIED_DEPLOYMENT_SET');}
   return{m,tools:pinTools(pinned(m.tool_pins).tools,build),build};
 }
 /** The configured pins are supervised disk observations, not native identity authentication. */
@@ -213,7 +213,7 @@ export async function connectXmem(c:LocalConfig,totalDeadline?:number):Promise<X
   };
   const guard=async()=>{
     const status=await call('xmem_standalone_status');
-    if(build===UNIFIED_BUILD||nativeOrdinary)memoryCheck(status.runtime?.build_id===build&&status.runtime.contract_version==='xmem-companion/3'&&status.runtime.profile==='companion'&&status.runtime.capabilities?.ordinary_tool_count===9&&status.runtime.capabilities.authenticated_identity===false,'MEMORY_UNIFIED_STATUS_BUILD');
+    if(isUnifiedBuild(build)||nativeOrdinary)memoryCheck(status.runtime?.build_id===build&&status.runtime.contract_version==='xmem-companion/3'&&status.runtime.profile==='companion'&&status.runtime.capabilities?.ordinary_tool_count===9&&status.runtime.capabilities.authenticated_identity===false,'MEMORY_UNIFIED_STATUS_BUILD');
     memoryCheck(status.project_root===c.project_root&&status.project_id===m.project_id&&status.configured===true&&status.policy_hash===m.policy_hash&&status.automatic_hooks===false,'MEMORY_PROJECT_POLICY_MISMATCH');
     const p=status.policy;memoryCheck(p?.schema_version===1&&p.mode==='SEMI_AUTO'&&p.enabled===true&&p.workspace_id===m.workspace_id&&p.default_role==='developer'&&Array.isArray(p.allowed_roles)&&canonical(p.allowed_roles)===canonical(['developer'])&&hash(canonical(p))===m.policy_hash,'MEMORY_POLICY_SCOPE_MISMATCH');
     memoryCheck(Number.isSafeInteger(p.payload_budget_bytes)&&p.payload_budget_bytes>=1024&&p.payload_budget_bytes<=m.limits.payload_bytes,'MEMORY_POLICY_BUDGET_UNSUPPORTED');

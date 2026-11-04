@@ -1,6 +1,6 @@
 {
   "name": "xdev",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local D2 supervised development with optional XMem V2.1 engineering memory and explicit project binding.",
   "author": {
     "name": "XDev"

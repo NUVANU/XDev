@@ -11,7 +11,7 @@ import { prepareEngineering, checkEngineeringStatus, engineeringValue, checkEngi
 import { checkReadback } from './memory-bridge.ts';
 import { E7_NATIVE_BUILD } from './sdk-builds.ts';
 import { inspectMemoryOperation, reserveNativeCaptureStart } from './memory-operation.ts';
-import { selectMemoryBoundary, boundaryOptions, UNIFIED_BUILD } from '../src/host-surface/project-memory-boundary.ts';
+import { selectMemoryBoundary, boundaryOptions, isUnifiedBuild } from '../src/host-surface/project-memory-boundary.ts';
 type ChildStage='ENTRY'|'INPUT_READY'|'CONFIG_READY'|'PREPARE_READY'|'ENGINEERING_SDK_READY'|'STANDALONE_SDK_READY'|'PATHS_READY'|'BODY_PREPARE_READY'|'STATUS_BEFORE_READY'|'READ_ENTER'|'READ_RETURN'|'STATUS_AFTER_READY'|'CORE_NORMAL_RETURN'|'CORE_ERROR_RETURN'|'RESULT_READY'|'ERROR_ENVELOPE'|'READ_GUARD_READY'|'IMAGE_ONE_ENTER'|'IMAGE_ONE_RETURN'|'QUERY_ENTER'|'QUERY_RETURN'|'IMAGE_TWO_ENTER'|'IMAGE_TWO_RETURN'|'READ_REVALIDATED';
 let childTraceStart:bigint|undefined,childTraceCount=0,childPhysicalTrace=false;
 const PHYSICAL_TRACE_STAGES:readonly string[]=["ENTRY","READ_ENTER","READ_GUARD_READY","IMAGE_ONE_ENTER","IMAGE_ONE_RETURN","QUERY_ENTER","QUERY_RETURN","IMAGE_TWO_ENTER","IMAGE_TWO_RETURN","READ_REVALIDATED","READ_RETURN","CORE_NORMAL_RETURN","CORE_ERROR_RETURN","RESULT_READY","ERROR_ENVELOPE"];
@@ -144,7 +144,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   // prepareEngineering has verified the full closed inventory and that this SDK
   // is runtime_root/dist/src/engineering-memory.js; paths.js is its fixed peer.
   const paths=selectMemoryBoundary(local.config)?await import(pathToFileURL(join(dirname(p.e.sdk.path),'paths.js')).href):undefined;childStage('PATHS_READY');
-  const physical=childPhysicalTrace&&p.e.build_id===UNIFIED_BUILD?await import(pathToFileURL(join(dirname(p.e.sdk.path),'physical-readonly.js')).href):undefined;
+  const physical=childPhysicalTrace&&isUnifiedBuild(p.e.build_id)?await import(pathToFileURL(join(dirname(p.e.sdk.path),'physical-readonly.js')).href):undefined;
   const observeRead=typeof physical?.withPhysicalReadObservation==='function'
    ?(operation:()=>any)=>physical.withPhysicalReadObservation((stage:ChildStage)=>childStage(stage),operation)
    :undefined;

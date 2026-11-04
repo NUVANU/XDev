@@ -9,7 +9,7 @@ import type { MemoryConfirmation, MemoryIntent } from './memory-operation.ts';
 
 import { bridgeRelated } from './related-memory.ts';
 import { projectCurrentMemoryFacts } from './current-memory-facts.ts';
-import { selectMemoryBoundary, E7_NATIVE_BUILD, UNIFIED_BUILD } from '../src/host-surface/project-memory-boundary.ts';
+import { selectMemoryBoundary, E7_NATIVE_BUILD, isUnifiedBuild } from '../src/host-surface/project-memory-boundary.ts';
 
 import { nativeOrdinaryAllowed } from './sdk-builds.ts';
 
@@ -57,16 +57,16 @@ export function checkReadback(c:LocalConfig,value:any,content:string,revision:st
   memoryCheck(p.record?.content===content&&p.source_content_hash===hash(content)&&p.record.previous_revision_id===expectedPrevious&&['ASSERTED','HYPOTHESIS'].includes(p.record.epistemic_state),'MEMORY_READ_SOURCE_CONTENT_MISMATCH');
   memoryCheck(word(p.record.record_id)&&word(p.record.revision_id)&&word(p.source?.source_id)&&p.source.kind==='agent'&&same(p.binding.allowed_source_ids,[p.source.source_id])&&(revision===null||p.record.revision_id===revision),'MEMORY_READ_REFERENCE_MISMATCH');
   memoryCheck(p.durable_receipt?.kind==='CORE_HOST_CAPTURE'&&digest(p.durable_receipt.event_payload_hash)&&p.durable_receipt.event_id==='host-capture-'+p.record.revision_id&&p.durable_receipt.idempotency_key===p.durable_receipt.event_id,'MEMORY_READ_DURABLE_RECEIPT_INVALID');
-  const boundaryBuild=observedBuild===UNIFIED_BUILD?UNIFIED_BUILD:selectMemoryBoundary(c)?.boundary.sdk_build_id;
-  const unified=boundaryBuild===UNIFIED_BUILD||nativeOrdinaryAllowed(c,boundaryBuild)||(m.engineering?.enabled===true&&m.engineering.build_id===UNIFIED_BUILD);
+  const boundaryBuild=isUnifiedBuild(observedBuild)?observedBuild:selectMemoryBoundary(c)?.boundary.sdk_build_id;
+  const unified=isUnifiedBuild(boundaryBuild)||nativeOrdinaryAllowed(c,boundaryBuild)||(m.engineering?.enabled===true&&isUnifiedBuild(m.engineering.build_id));
   if(unified){exact(p.current,['revision_id','lifecycle','is_current']);memoryCheck(typeof p.current.is_current==='boolean'&&(p.current.is_current===false?p.current.revision_id===null&&p.current.lifecycle==='UNKNOWN':p.current.revision_id===p.record.revision_id&&word(p.current.revision_id)&&typeof p.current.lifecycle==='string'),'MEMORY_READ_CURRENT_INVALID');}
   else memoryCheck(typeof p.current?.is_current==='boolean'&&word(p.current.revision_id)&&typeof p.current.lifecycle==='string'&&p.current.is_current===(p.current.revision_id===p.record.revision_id),'MEMORY_READ_CURRENT_INVALID');
   return{status:p.current.is_current&&p.current.lifecycle==='ACTIVE'?'SAVED':'STALE',readback:'COMPLETE',persisted:'SAVED',applicability:'NOT_EVALUATED',revision_id:p.record.revision_id,record_id:p.record.record_id,source_id:p.source.source_id,payload_sha256:value.content_hash,source_content_sha256:p.source_content_hash,current:p.current};
 }
-export function checkContext(c:LocalConfig,value:any) {
+export function checkContext(c:LocalConfig,value:any,observedBuild?:unknown) {
   const m=c.memory_bridge!,ctx=value.context;
-  const boundaryBuild=selectMemoryBoundary(c)?.boundary.sdk_build_id;
-  const unified=boundaryBuild===UNIFIED_BUILD||nativeOrdinaryAllowed(c,boundaryBuild);
+  const boundaryBuild=observedBuild??selectMemoryBoundary(c)?.boundary.sdk_build_id;
+  const unified=isUnifiedBuild(boundaryBuild)||nativeOrdinaryAllowed(c,boundaryBuild);
   memoryCheck(value.project_root===c.project_root&&value.project_id===m.project_id&&value.policy_hash===m.policy_hash&&value.automatic_hooks===false&&same(value.session,{workspace_id:m.workspace_id,task_ref:m.task_ref,task_version:m.task_version,role:'developer'}),'MEMORY_CONTEXT_SCOPE_MISMATCH');
   memoryCheck(ctx?.kind==='ContextPack'&&ctx.compiler_version==='context-v2'&&ctx.budget_unit==='utf8-bytes'&&ctx.diagnostics?.execution_verified===false,'MEMORY_CONTEXT_CONTRACT');
   const r=ctx.request;for(const [k,v] of Object.entries(memoryScope(c)))memoryCheck(r?.[k]===v,'MEMORY_CONTEXT_REQUEST_SCOPE');
@@ -98,7 +98,7 @@ export async function bridgeMemory(local:ReturnType<typeof import('./configure.t
     if(args.action!=='recall'){memoryCheck(args.source,'MEMORY_SOURCE_REQUIRED');event=eventInput(c,args.action,args.source);}
     before=hash(canonical(manifest()));const dependencyView=['recall','checkpoint'].includes(args.action)&&approvedDependencies(c,'ordinary')!==null;peer=dependencyView?standaloneDependencyPeer(local,operation.deadline()):await connect(c,operation.total);checkLocal();if(event)eventInput(c,args.action,args.source!);
     const task={task_ref:m.task_ref,task_version:m.task_version,role:'developer'};
-    if(args.action==='recall') {onSideEffect();attempted=true;response={context:checkContext(c,await peer.call('xmem_session_start',task)),saved:'NOT_REQUESTED',readback:'NOT_REQUESTED'};}
+    if(args.action==='recall') {onSideEffect();attempted=true;response={context:checkContext(c,await peer.call('xmem_session_start',task),peer.diagnostic().sdk_build),saved:'NOT_REQUESTED',readback:'NOT_REQUESTED'};}
     else {
       const e=event!;let state:ReturnType<typeof beginMemoryOperation>;
       if(args.action==='reconcile'){state=inspectMemoryOperation(c.control_root,e.intent);claimed=true;}

@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { exact, loadConfig, bytes, hash } from './configure.ts';
 import { memoryCheck as check, memoryJson, verifyMemoryPins, approvedDependencies, dependencyRegistration, decodeXmem, checkOrdinarySdkStatus } from './xmem-client.ts';
 import { selectMemoryBoundary, boundaryOptions, boundaryDeployment } from '../src/host-surface/project-memory-boundary.ts';
-import { E7_NATIVE_BUILD, UNIFIED_BUILD, nativeJointQuery, nativeOrdinaryAllowed } from './sdk-builds.ts';
+import { E7_NATIVE_BUILD, isUnifiedBuild, nativeJointQuery, nativeOrdinaryAllowed } from './sdk-builds.ts';
 
 /** Module-only SDK injection is a TEST_ONLY seam, never public input. */
 export function executeStandaloneViewChild(local:ReturnType<typeof loadConfig>,input:any,sdk:any,views:any,paths:any){
@@ -14,7 +14,7 @@ export function executeStandaloneViewChild(local:ReturnType<typeof loadConfig>,i
  check(['recall','checkpoint'].includes(input.action)&&local.configPath===input.config_path&&local.configHash===input.config_sha256,'MEMORY_VIEW_INPUT');
  const c=local.config,m=c.memory_bridge!,selected=selectMemoryBoundary(c),d=approvedDependencies(c,'ordinary');
  const build=selected?.boundary.sdk_build_id;
- check(selected&&(build===UNIFIED_BUILD||nativeOrdinaryAllowed(c,build))&&d,'MEMORY_VIEW_DEPENDENCY_REQUIRED');
+ check(selected&&(isUnifiedBuild(build)||nativeOrdinaryAllowed(c,build))&&d,'MEMORY_VIEW_DEPENDENCY_REQUIRED');
  exact(input.input,['task_ref','task_version','role',...(input.action==='checkpoint'?['completed','pending','blocked','next_steps']:[])]);
  check(input.input.task_ref===m.task_ref&&input.input.task_version===m.task_version&&input.input.role==='developer','MEMORY_VIEW_SCOPE');
  const deadline=()=>check(Number.isSafeInteger(input.deadline_unix_ms)&&Date.now()<input.deadline_unix_ms,'MEMORY_VIEW_TOTAL_DEADLINE');
@@ -50,7 +50,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
    check(!state.confirmation||input.input.revision_id===state.confirmation.revision_id,'MEMORY_E7_ENGINEERING_REVISION_MISMATCH');
   }else check(input.source===undefined,'MEMORY_UNEXPECTED_ENGINEERING_SOURCE');
   const options=boundaryOptions(selected.boundary,input.deadline_unix_ms,local.config.memory_bridge!.limits.payload_bytes),inv=boundaryDeployment(selected.boundary),sdk=await import(pathToFileURL(join(inv.runtime_root,'dist/src/standalone.js')).href);
-  if(input.action!==undefined){check(selected.boundary.sdk_build_id===UNIFIED_BUILD||nativeOrdinaryAllowed(local.config,selected.boundary.sdk_build_id),'MEMORY_VIEW_BUILD_UNSUPPORTED');const views=await import(pathToFileURL(join(inv.runtime_root,'dist/src/mcp.js')).href),paths=await import(pathToFileURL(join(inv.runtime_root,'dist/src/paths.js')).href);process.stdout.write(JSON.stringify(executeStandaloneViewChild(local,input,sdk,views,paths))+'\n');}
+  if(input.action!==undefined){check(isUnifiedBuild(selected.boundary.sdk_build_id)||nativeOrdinaryAllowed(local.config,selected.boundary.sdk_build_id),'MEMORY_VIEW_BUILD_UNSUPPORTED');const views=await import(pathToFileURL(join(inv.runtime_root,'dist/src/mcp.js')).href),paths=await import(pathToFileURL(join(inv.runtime_root,'dist/src/paths.js')).href);process.stdout.write(JSON.stringify(executeStandaloneViewChild(local,input,sdk,views,paths))+'\n');}
   else{exact(input.input,['task_ref','task_version','role','memory_key','revision_id','payload_budget_bytes']);const m=local.config.memory_bridge!;check(input.input.task_ref===m.task_ref&&input.input.task_version===m.task_version&&input.input.role==='developer'&&input.input.payload_budget_bytes===m.limits.payload_bytes,'MEMORY_READ_SCOPE');const started=Date.now(),stage=(name:string)=>{try{writeSync(2,'XDEV_FIXED_READ_V1|'+name+'|'+(Date.now()-started)+'\n');}catch{/* Diagnostic loss is not a business result. */}};stage('READ_ENTER');const result=sdk.readStandaloneMemory(local.config.project_root,input.input,options);stage('READ_RETURN');selectMemoryBoundary(local.config);check(hash(bytes(local.configPath))===local.configHash&&Date.now()<input.deadline_unix_ms,'MEMORY_READ_FINAL_DRIFT');process.stdout.write(JSON.stringify({format:'xdev-standalone-read-child-j01-1',result})+'\n');}
  }catch{process.exitCode=1;}
 }

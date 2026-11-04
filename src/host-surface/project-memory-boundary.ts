@@ -10,13 +10,15 @@ import { parseD1UniqueJson } from '../job-runtime/contracts.ts';
 export const PHYSICAL_BUILD='31a9132b6d99124b8b282d21f56299f6186d6fff25400d3604d020e9b72f2b4a';
 /** TEST_ONLY diagnostic successor build; not a released or qualified runtime. */
 export const UNIFIED_BUILD='83cb3e28899687faaf5e04e8f53ef0d6437d32205dde9dca857172c68b7b2eff';
+export const COMMUNITY_XMEM_BUILD='431860000b787da424fba032f5a71beff7090da19fc1196ba934f5e759972b1d';
+export const isUnifiedBuild=(build:unknown):boolean=>build===UNIFIED_BUILD||build===COMMUNITY_XMEM_BUILD;
 export const E7_NATIVE_BUILD='0832c4e414d53da6d1b09c9fa694e542d62b8b0c43fa67ed9b0404b62417810d';
 const E7_NATIVE_HELPER='dist/src/xmem-win-physical.exe';
 const E7_NATIVE_HELPER_SHA='63dd9f3c445ab43a075c0cc4487d7cdc2a7b60de3d67fe491a8528bf62329851';
 export const LAYOUT_HASH='a0b9376a101f956c9d30f2fcaa89876b6eeb19dc0ea2b58c5ba4ea81582da06c';
 /** Closed exact identities. Additional entries require actual frozen producer
  * artifacts; no path, runtime claim or caller input can register a build. */
-export const BOUNDARY_BUILDS:Readonly<Record<string,{js:number;runtime:number;layout:string}>>=Object.freeze({[PHYSICAL_BUILD]:{js:37,runtime:39,layout:LAYOUT_HASH},[UNIFIED_BUILD]:{js:46,runtime:48,layout:LAYOUT_HASH},[E7_NATIVE_BUILD]:{js:47,runtime:50,layout:LAYOUT_HASH}});
+export const BOUNDARY_BUILDS:Readonly<Record<string,{js:number;runtime:number;layout:string}>>=Object.freeze({[PHYSICAL_BUILD]:{js:37,runtime:39,layout:LAYOUT_HASH},[UNIFIED_BUILD]:{js:46,runtime:48,layout:LAYOUT_HASH},[COMMUNITY_XMEM_BUILD]:{js:46,runtime:48,layout:LAYOUT_HASH},[E7_NATIVE_BUILD]:{js:47,runtime:50,layout:LAYOUT_HASH}});
 export const STATIC_SLOTS=['PROJECT_CONFIG','STANDALONE_POLICY','STORAGE_LOCATION','SHARING_POLICY','CUSTOM_IDENTITY'] as const;
 export type BoundaryRef={path:string;sha256:string};
 export type Boundary={format:'xdev-project-memory-boundary-1';xdev_project_id:string;project_root:string;project_id:string;workspace_id:string;role:'developer';mode:'PROJECT_LOCAL'|'CUSTOM_LOCAL';storage_root:string;location_hash:string;policy_hash:string;static_files:Record<typeof STATIC_SLOTS[number],{presence:'PRESENT'|'ABSENT';sha256:string|null}>;layout_contract_sha256:string;sdk_build_id:string;deployment:BoundaryRef};
