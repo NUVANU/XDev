@@ -123,6 +123,8 @@ async function setup() {
   mkdirSync(marketplace, { recursive: true });
   cpSync(join(source, '.codex-plugin'), join(plugin, '.codex-plugin'), { recursive: true });
   cpSync(join(source, 'skills'), join(plugin, 'skills'), { recursive: true });
+  mkdirSync(join(plugin, 'docs'));
+  cpSync(join(source, 'docs', 'COMMUNITY.md'), join(plugin, 'docs', 'COMMUNITY.md'));
   save(join(marketplace, 'marketplace.json'), {
     name: 'xsuite-community-local', interface: { displayName: 'X Suite Community' },
     plugins: [{ name: 'xdev', source: { source: 'local', path: './' },

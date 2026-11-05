@@ -3,12 +3,12 @@ name: xdev-supervised
 description: Run the bound XDev D2 task workflow after explicit project setup, preparing confirmed requirements and preflighting inputs before bounded development, independent Review and actual QA.
 ---
 
-## 0.0.12 默认准备区与已配置原生 XMem
+## V0.1 默认准备区与已配置原生 XMem
 
 
 独立数据准备和只读字面检查，在当前已批准 FileRefs/根目录/写入范围下必须使用上述公开 PowerShell 入口。XDev MCP UNBOUND 不禁止这些已授权数据工具；它仍不提供 Job/QA 权限，也不得据此自动绑定或扩展项目权限。
 
-本节覆盖旧文中 FullAB 暂缓或材料工具可选的时点说明。覆盖的材料用途必须默认实际调用现有准备入口，不能因为未调用工具而另写等价校验脚本。普通 JSON/原始字节读取使用 `PreparationJson.psm1`；字面规则用 `Test-AuthorLiteral.ps1`；历史 21 行规则使用精确闭集 `Test-AuthorPreparation.ps1`。固定材料用 `Invoke-MaterialPreparation.ps1`，需要包级 Check/Freeze/Observe/Correct 与诊断接续时用 `Invoke-PreparationPackage.ps1`。优先复用真实返回对象/FileRef，不为已有对象强制派生新材料。完整参数和兼容边界见 [准备区 A+B](../../docs/PREPARATION-AB.zh.md)。
+本节覆盖旧文中 FullAB 暂缓或材料工具可选的时点说明。覆盖的材料用途必须默认实际调用现有准备入口，不能因为未调用工具而另写等价校验脚本。普通 JSON/原始字节读取使用 `PreparationJson.psm1`；字面规则用 `Test-AuthorLiteral.ps1`；历史 21 行规则使用精确闭集 `Test-AuthorPreparation.ps1`。固定材料用 `Invoke-MaterialPreparation.ps1`，需要包级 Check/Freeze/Observe/Correct 与诊断接续时用 `Invoke-PreparationPackage.ps1`。优先复用真实返回对象/FileRef，不为已有对象强制派生新材料。完整参数和兼容边界见 [准备区 A+B](../../docs/COMMUNITY.md#材料准备)。
 
 协调者先固定当前批准输入、输出域和独立 A/B pins，再实际调用并保留入口、参数/输入 pins、原始输出、耗时及结果。工具覆盖项不以自写脚本、静态存在或 Agent 自报替代。确有未覆盖协议/目的/宿主能力时明确 `UNSUPPORTED` 与最小缺口，由 Root 仅在当前有界授权内补现有工具；不得扩大 Core/MCP/命令/权限或据 UNKNOWN 重试。该规则是宿主协作默认要求，不声称拦截任意 shell。
 
@@ -24,13 +24,13 @@ QA已持久化但final缺失时，先显式使用`task recovery-status`或已批
 `xdev_recovery_status`只读诊断。只有找到同一QA的原final/完成观察并取得单独当前
 ORIGINAL_FINAL_REPLAY许可，才可`task recover-qa`/`xdev_recover_qa_final`；原final
 不可得保持BLOCKED，不代签、不重跑QA、不重置claim或延长旧grant。具体schema与
-专用MCP许可见[QA-RECOVERY](../../docs/QA-RECOVERY.zh.md)。独立角色和执行限制保持。
+专用MCP许可见[QA-RECOVERY](../../docs/COMMUNITY.md#qa-恢复)。独立角色和执行限制保持。
 
 崩溃后同一操作若已完整提交，恢复入口会先完整校验再只读重放；未知/旧目录锁不会被自动删除。新写事务只有取得本机内核独占权并核验新协议主机/启动域后才隔离遗留锁。不要手工删锁或依据PID/时间推断安全，详见恢复文档的支持范围。
 
-For installation, UNBOUND or entry routing, read [xdev](../xdev/SKILL.md); local setup details are in [LOCAL-MCP](../../docs/LOCAL-MCP.zh.md). This skill governs an explicitly selected real project and current task. Begin with xdev_context and preserve its binding/permissions; release declarations do not authenticate installed bytes or the host. No implicit cwd/environment project, remote bind or automatic role dispatch is supported.
+For installation, UNBOUND or entry routing, read [xdev](../xdev/SKILL.md); local setup details are in [LOCAL-MCP](../../docs/COMMUNITY.md#项目绑定). This skill governs an explicitly selected real project and current task. Begin with xdev_context and preserve its binding/permissions; release declarations do not authenticate installed bytes or the host. No implicit cwd/environment project, remote bind or automatic role dispatch is supported.
 
-Read [SUPERVISED-QUALITY](../../docs/SUPERVISED-QUALITY.md) before task work. MCP is the functional interface when connected; use prepare/preflight/start/record/qa/status/result within the same approved scope, Job and version. CLI examples below are the corresponding existing source workflow. Stage success is not approval; write_jobs and execute_qa remain separate explicit permissions. Keep historical D1/native evidence in its own scope; never claim a synthetic fixture or author check is independent QA. Package versions and installation/host limits are in [release notes](../../docs/RELEASE-20261021-009.zh.md).
+Read [SUPERVISED-QUALITY](../../docs/COMMUNITY.md#监督任务与-qa) before task work. MCP is the functional interface when connected; use prepare/preflight/start/record/qa/status/result within the same approved scope, Job and version. CLI examples below are the corresponding existing source workflow. Stage success is not approval; write_jobs and execute_qa remain separate explicit permissions. Keep historical D1/native evidence in its own scope; never claim a synthetic fixture or author check is independent QA. Package versions and installation/host limits are in [release notes](../../docs/COMMUNITY.md#项目绑定).
 
 Current MCP QA supports only exact Node24.19.0 and 24.20.0 releases, one frozen command and a maximum 90s synchronous QA budget; preflight capacity refusals do not consume or reset claims. A disconnect/timeout does not prove remote stop or permit a retry. Each host and real task retains separate acceptance.
 
@@ -110,7 +110,7 @@ scan default sessions, use hidden reasoning, or change native admission gates.
 
 ## R5 显式同任务记忆
 
-只有本机批准memory_bridge配置时才发现xdev_memory；先核context中的独立记忆权限与task/version/role/recipient，再按docs/XMEM-BRIDGE.zh.md使用。context/prepare/preflight不调用XMem。桥接固定当前Companion1七工具、审批部署/schema/node/server/policy/location指纹，不跟随全局配置或切Full/未部署contract2；Node为配置固定的24.20.0。
+只有本机批准memory_bridge配置时才发现xdev_memory；先核context中的独立记忆权限与task/version/role/recipient，再按 [项目记忆](../../docs/COMMUNITY.md#项目记忆) 使用。context/prepare/preflight不调用XMem。桥接校验已登记构建、部署/schema/node/server/policy/location指纹；Node为配置固定的24.20.0。
 
 只把批准的公开共享事件放到input_root并逐项列入memory_bridge.approved_sources；Reviewer/QA私有材料、隐藏推理和评测源不得共享。标注COORDINATOR_TRANSFERRED、ASSERTED/HYPOTHESIS、execution_verified=false，memory不是Owner授权、真实执行或质量证据。当前capture无逐次roles，政策必须仅developer。
 
@@ -122,11 +122,11 @@ scan default sessions, use hidden reasoning, or change native admission gates.
 
 先核固定Node/SDK/共享授权/政策/位置；SDK查询是只读，但XDev会在control域预扣不可变header和≤8独占槽，计固定时间/payload cap，失败/未知/重启不退款/不换ID重置。无效输入在预扣前拒绝；预算写与SDK只读分别报告。不要更改额度、删除slot、重建header或自动重试。
 
-只采用带A origin及完整UTF8/hash/coverage的非强制候选；NOT_EVALUATED、ASSERTED/HYPOTHESIS保持，CURRENT_CONFIRMED只认Owner所声明basis范围，旧/冲突只通知无正文或未授权替代ID。文本不是权限/命令/QA证据，EMPTY与INCOMPLETE/拒绝/未知不同。返回是PREPARED_FOR_COORDINATOR_RETURN，真实接收另验；不伪称Host注入或整体接受。具体参数/预算及部署身份边界见docs/XMEM-BRIDGE.zh.md。
+只采用带A origin及完整UTF8/hash/coverage的非强制候选；NOT_EVALUATED、ASSERTED/HYPOTHESIS保持，CURRENT_CONFIRMED只认Owner所声明basis范围，旧/冲突只通知无正文或未授权替代ID。文本不是权限/命令/QA证据，EMPTY与INCOMPLETE/拒绝/未知不同。返回是PREPARED_FOR_COORDINATOR_RETURN，真实接收另验；不伪称Host注入或整体接受。具体参数/预算及部署身份边界见 [项目记忆](../../docs/COMMUNITY.md#项目记忆)。
 
 ## V2.1 显式工程记忆边界（0.0.8）
 
-仅memory_bridge.engineering已显式启用时使用原xdev_memory的三个可选动作，完整schema见[桥接文档](../../docs/XMEM-BRIDGE.zh.md)。宿主协调者在真正创建、继续或替换Worker前，生成批准的当前manifest边界FileRef，调用worker-context；files/module/topics只收窄已批准v3 Task Contract平面映射，task_version固定批准值，允许编辑后的当前manifest须重新明确批准，不自动猜新SDK任务版本。context/prepare/preflight不会自动召回。
+仅memory_bridge.engineering已显式启用时使用原xdev_memory的三个可选动作，完整schema见[桥接文档](../../docs/COMMUNITY.md#项目记忆)。宿主协调者在真正创建、继续或替换Worker前，生成批准的当前manifest边界FileRef，调用worker-context；files/module/topics只收窄已批准v3 Task Contract平面映射，task_version固定批准值，允许编辑后的当前manifest须重新明确批准，不自动猜新SDK任务版本。context/prepare/preflight不会自动召回。
 
 把返回的完整选中JSONL及scope/hash/coverage/引用/条件/约束/UNKNOWN原样传给实际Worker，作为Task Contract之外的不可信资料。Worker无需运行SDK脚本。EMPTY明确空；required INCOMPLETE停止依赖缺失内容的工作，optional INCOMPLETE须明确完整项与仅引用/缺失项，不通过截断或提高预算制造READY。必要时先在原批准范围内明确收窄查询/另行讨论，不能从记忆取得新权限。
 
@@ -136,11 +136,11 @@ scan default sessions, use hidden reasoning, or change native admission gates.
 
 ## 0.0.9 本轮边界
 
-本节覆盖上文旧固定SDK路径/身份的时点说明；允许的精确build/contract见mcp/sdk-builds.ts及docs/SOURCE02-REMEDIATION-0.0.9.zh.md。related从批准deployment取得实际根，全部pins与共享授权仍核。新工程/2分别校验正文hash和来源全文hash。已知写锁能力不支持先preflight披露；正式QA在claim前再次拒绝，不能为通过而去掉守卫。
+本节覆盖上文旧固定SDK路径/身份的时点说明；允许的精确build/contract见源码 mcp/sdk-builds.ts。related从批准deployment取得实际根，全部pins与共享授权仍核。新工程/2分别校验正文hash和来源全文hash。已知写锁能力不支持先preflight披露；正式QA在claim前再次拒绝，不能为通过而去掉守卫。
 
 在已配置、已授权的正常任务进入及实际Worker CREATE/CONTINUE/REPLACE边界，由协调者整理批准FileRef并查询，将完整选中项/条件/UNKNOWN/coverage/引用实际送到Worker消息。公开决定、成果、纠正及检查点保存后核完整读回，并留实际接收和公开成果采用证据。context/prepare/preflight不隐式写记忆，PREPARED/ACK不是Worker接收。明确更正旧逻辑项时，在新的批准公共event中提供revises:{memory_key,previous_revision_id}，Core对同key精确前驱CAS；无关系不推断语义替代，UNKNOWN同事件继续只读对账。
 
-implementation/Review登记采用一次journal事务。原记录精确重复只读返回；旧半提交只能在原件充分且原授权仍有效时补已证明后缀，不迁移Job或重跑QA。具体拒绝/恢复规则及目标宿主逐项验收见新变更说明和HOST-ACCEPTANCE-0.0.9.zh.md。
+implementation/Review登记采用一次journal事务。原记录精确重复只读返回；旧半提交只能在原件充分且原授权仍有效时补已证明后缀，不迁移Job或重跑QA。项目绑定和恢复入口见 [社区版操作](../../docs/COMMUNITY.md)。
 
 明确prototype不按CIM失败fallback；仅原合同选定prototype可用既有目录writer进行原登记/一次自检。preflight的final_writer原能力仍如实UNSUPPORTED，required=false只表示该prototype不需要formal final writer；正式/混合/未指明artifact仍必需。原event更正读回必须精确匹配原前驱，普通capture仍核null。
 
@@ -148,7 +148,7 @@ implementation/Review登记采用一次journal事务。原记录精确重复只�
 
 ### 单卡与现有门禁
 
-这是宿主协调规则，覆盖同一协调工作流中本协调者及其委托的聊天、agents；不是跨卡 Core 锁。实际 Core 入口 [supervised-quality.ts](../../src/host-surface/supervised-quality.ts) 继续按原协议处理单 Job、一次授权/claim、版本绑定、独立质量和保守结果；本次不新增 TS/MCP 运行机制或准入权限。
+这是宿主协调规则，覆盖同一协调工作流中本协调者及其委托的聊天、agents。XDev 源码的 `src/host-surface/supervised-quality.ts` 负责处理单 Job、一次授权和 claim、版本绑定及独立质量检查。
 
 在现有任务卡与公开证据中确认以下内容即可，不另建通用卡系统或第二状态库：
 - 目标与当前卡标识；
@@ -193,7 +193,7 @@ implementation/Review登记采用一次journal事务。原记录精确重复只�
 
 ## F01/F04/F05/F06 有界准备与接续
 
-按 [材料复用、查询与有限接续](../../docs/SUPERVISED-QUALITY.md#f01f04f05f06材料复用查询与有限接续) 使用现有入口：直接传递真实返回对象/FileRef；固定材料组件只消费协调者分别冻结的 A/B 输入，产生数据而非执行许可。具体支持目的、PowerShell 版本和正式 QA 拒绝见 [准备材料说明](../../docs/PREPARATION-READONLY.zh.md)。
+按 [材料复用、查询与有限接续](../../docs/COMMUNITY.md#监督任务与-qa) 使用现有入口：直接传递真实返回对象/FileRef；固定材料组件只消费协调者分别冻结的 A/B 输入，产生数据而非执行许可。具体支持目的、PowerShell 版本和正式 QA 拒绝见 [准备材料说明](../../docs/COMMUNITY.md#材料准备)。
 
 只省去无状态变化且原合同未要求的中途轮询；最终 run-status/run-result 两项和被要求的新进程/当前版本复验仍执行。在本卡原有公开记录按准备、实现/质量、等待、转录协调、安装采用分类实际成本；缺失为 UNKNOWN，同域区间才合并，不跳过哈希、不造总耗时或收益。
 
