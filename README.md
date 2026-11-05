@@ -2,7 +2,7 @@
 
 XDev 在 Codex 中按用户批准的项目、任务版本和改动范围准备及执行开发，并记录 Review、QA 和交付结果。本源码对应 X Suite 联合验收中的 R10 执行代码，以及保留现有材料准备工具的本地插件外壳。
 
-当前社区版为 **V0.1**（软件包版本 `0.1.1`），配套 XMem `v0.1.1`。Windows x64 从零安装及绑定方法见 [X Suite 安装指南](https://github.com/NUVANU/X-Suite/blob/main/INSTALL.md)。
+当前社区版为 **V0.1**（软件包版本 `0.1.2`），配套 XMem `v0.1.1`。Windows x64 从零安装及绑定方法见 [X Suite 安装指南](https://github.com/NUVANU/X-Suite/blob/main/INSTALL.md)。
 
 ## 本地使用
 
