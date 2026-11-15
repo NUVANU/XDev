@@ -36,16 +36,21 @@ function pinned(ref:FileRef,limit=2*1024*1024){refShape(ref);const b=bytes(ref.p
 function enabled(c:LocalConfig):Enabled {const e=c.memory_bridge?.engineering;check(e?.enabled===true,'ENGINEERING_NOT_ENABLED');return e;}
 export function engineeringScope(c:LocalConfig){return{xdev_project_id:c.project_id,...memoryScope(c)};}
 
-/** Disk pins are observations, not loaded-module or actor authentication. */
-export function guardEngineering(local:Local){
- const c=local.config,m=c.memory_bridge!,e=enabled(c);
+/** SDK-free task admission must precede memory runtime setup. */
+function readEngineeringTaskInput(local:Local){
+ const c=local.config,e=enabled(c);
  check(hash(bytes(local.configPath))===local.configHash,'ENGINEERING_LOCAL_CONFIG_DRIFT');
  // Exact approval is followed by the same complete input graph as ordinary MCP.
  // This precedes every Core reader, SDK child and operation intent.
  check(c.approved_requests?.some(r=>same(r,e.request)),'ENGINEERING_REQUEST_NOT_APPROVED');
- let request:any;
- try{request=createInputReader(c).source(e.request);}
+ try{return createInputReader(c).source(e.request);}
  catch(error){throw new MemoryError('CONTRACT','ENGINEERING_TASK_INPUT_REFUSED',{input_error_sha256:hash(error instanceof Error?error.message:String(error))});}
+}
+
+/** Disk pins are observations, not loaded-module or actor authentication. */
+export function guardEngineering(local:Local){
+ const c=local.config,m=c.memory_bridge!,e=enabled(c);
+ const request=readEngineeringTaskInput(local);
  const selected=verifyBoundEngineeringPins(c),mode=selected?.boundary.mode??'CUSTOM_LOCAL';check(request.format==='xdev-supervised-request-3'||request.format==='xdev-supervised-request-4'&&selected&&same(request,selected.request),'ENGINEERING_V3_OR_BOUND_V4_REQUIRED');
  const native=e.build_id===E7_NATIVE_BUILD;
  if(native)check(request.format==='xdev-supervised-request-4'&&selected?.boundary.sdk_build_id===E7_NATIVE_BUILD&&nativeJointQuery(c),'ENGINEERING_NATIVE_JOINT_BOUNDARY_REQUIRED');
@@ -218,7 +223,9 @@ export function bridgeEngineering(local:Local,args:{action:string;source?:FileRe
   return result;
  };
  try{
-  operation=memoryBoundaryOperation(local.config,startedOperation);health();exact(args,['action','source']);check(args.source,'ENGINEERING_SOURCE_REQUIRED');const action=args.action as EngineeringAction;p=prepareEngineering(local,action,args.source);
+  exact(args,['action','source']);check(args.source,'ENGINEERING_SOURCE_REQUIRED');
+  readEngineeringTaskInput(local);
+  operation=memoryBoundaryOperation(local.config,startedOperation);health();const action=args.action as EngineeringAction;p=prepareEngineering(local,action,args.source);
   const childPath=fileURLToPath(new URL('./engineering-child.ts',import.meta.url)),childHash=hash(bytes(childPath));
   if(p.event){if(action==='engineering-reconcile')state=inspectMemoryOperation(local.config.control_root,p.event.intent);else{onSideEffect();claimed=true;state=beginMemoryOperation(local.config.control_root,p.event.intent);}}
   if(p.e.build_id===E7_NATIVE_BUILD&&action==='engineering-capture'&&state?.created===false){

@@ -1,6 +1,6 @@
 /** Read-only projection. Progress, quality and transport permissions are distinct. */
 export type PrimaryPermissions={source:'CORE_CONTRACT_NO_ADDITIONAL_LOCAL_GATE'|'MCP_LOCAL_CONFIG'|'UNKNOWN';write_jobs:boolean|null;execute_qa:boolean|null};
-export type PrimaryProgress={binding:'CHECKED'|'UNKNOWN';binding_error?:string;persisted_state:string|null;profile:string|null;authorization:'CURRENT'|'STOPPED_OR_EXPIRED'|'UNKNOWN';permissions:PrimaryPermissions;implementation_recorded:boolean|null;review_recorded:boolean|null;review_passed:boolean|null;qa_claimed:boolean|null;qa_run:'NOT_RUN'|'PASSED'|'FAILED'|'UNKNOWN';qa_final_recorded:boolean|null;delivery_verified:boolean|null};
+export type PrimaryProgress={binding:'CHECKED'|'UNKNOWN';binding_error?:string;persisted_state:string|null;profile:string|null;check_requirements?:unknown;authorization:'CURRENT'|'STOPPED_OR_EXPIRED'|'UNKNOWN';permissions:PrimaryPermissions;implementation_recorded:boolean|null;review_recorded:boolean|null;review_passed:boolean|null;qa_claimed:boolean|null;qa_run:'NOT_RUN'|'PASSED'|'FAILED'|'UNKNOWN';qa_final_recorded:boolean|null;delivery_verified:boolean|null};
 export function primaryNextStep(s:{progress?:PrimaryProgress;reasons?:string[]}){
  const result=(status:string,reason:string,action:unknown=null,missing:string[]=[])=>({status,reason,action,missing_observations:missing,automatic_execution:false});
  const p=s.progress;

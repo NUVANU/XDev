@@ -8,10 +8,13 @@ import { spawnSync } from 'node:child_process';
 import { JobStore, canonical, productionJobRoot } from '../job-runtime/store.ts';
 import type { EvidenceRef, Job, JobCommand, JobId } from '../job-runtime/contracts.ts';
 import { inspectSupervisedProfile, assertSupervisedWindow } from './supervised-profile.ts';
+import { inspectSupervisedRequirements, allowsCombinedChecker } from './supervised-requirements.ts';
 import { parseD1UniqueJson } from '../job-runtime/contracts.ts';
 import { inspectSupervisedPreparation, requireSupervisedPreparation, supervisedPreparationGuidance } from './supervised-preparation.ts';
 import { withSupervisedWriterLock, inspectSupervisedWriterCapability } from './supervised-writer-lock.ts';
 import { boundaryManifest, validateBoundary, boundaryHealth } from './project-memory-boundary.ts';
+import { externalPolicy, externalInputSubset, externalSourceShape, isExternalImplementation, verifyExternalImplementation,
+  externalImplementationProvenance, type ExternalImplementationSource } from './external-implementation-source.ts';
 
 // Explicit supervised provenance. This does not authenticate native roles or
 // satisfy the historical strict D1 admission/trace protocol.
@@ -19,7 +22,7 @@ type FileRef = { path: string; sha256: string };
 type Member = { path: string; sha256: string };
 type Criterion = { id: string; text: string };
 type Command = { id: string; argv: string[]; criteria: string[]; timeout_ms: number; required_output: string[] };
-type Request = { format: 'xdev-supervised-request-1'|'xdev-supervised-request-2'|'xdev-supervised-request-3'|'xdev-supervised-request-4'; task_context?:FileRef|null; memory_boundary?:FileRef|null; preparation?:FileRef; profile?:any; authorization?:any; spec: FileRef; allowed_scope: string[]; forbidden_scope: string[];
+type Request = { format: 'xdev-supervised-request-1'|'xdev-supervised-request-2'|'xdev-supervised-request-3'|'xdev-supervised-request-4'|'xdev-supervised-request-5'; check_requirements?:any; task_context?:FileRef|null; memory_boundary?:FileRef|null; preparation?:FileRef; profile?:any; authorization?:any; spec: FileRef; allowed_scope: string[]; forbidden_scope: string[];
   acceptance_criteria: Criterion[]; commands: Command[]; excluded_scope: string[] };
 type Session = { format: 'xdev-supervised-public-session-1'|'xdev-supervised-public-session-2'; role: 'implementation'|'review'|'qa'; session_ref: string;
   source_claim: 'COORDINATOR_TRANSFERRED_PUBLIC_TOOLS'; native_authenticated: false;
@@ -56,10 +59,11 @@ export function supervisedManifest(root: string,boundary?:FileRef|null): Member[
     need(out.length <= 4096, 'SUPERVISED_PROJECT_TOO_LARGE');
   }}; visit(root); return out.sort((a,b)=>a.path.localeCompare(b.path,'en'));
 }
-function validateRequest(r: Request,projectId?:string,projectRoot?:string,controlRoot?:string) {
-  const v4=r.format==='xdev-supervised-request-4',v3=r.format==='xdev-supervised-request-3'||v4,v2=r.format==='xdev-supervised-request-2'||v3;exact(r,['format','spec','allowed_scope','forbidden_scope','acceptance_criteria','commands','excluded_scope',...(v2?['profile','authorization']:[]),...(v3?['preparation']:[]),...(v4?['task_context','memory_boundary']:[])]);
+function validateRequest(r: Request,projectId?:string,projectRoot?:string,controlRoot?:string,phase:'admission'|'reopen'='admission'):any {
+  const v5=r.format==='xdev-supervised-request-5',v4=r.format==='xdev-supervised-request-4'||v5,v3=r.format==='xdev-supervised-request-3'||v4,v2=r.format==='xdev-supervised-request-2'||v3;exact(r,['format','spec','allowed_scope','forbidden_scope','acceptance_criteria','commands','excluded_scope',...(v5?['check_requirements','authorization']:v2?['profile','authorization']:[]),...(v3?['preparation']:[]),...(v4?['task_context','memory_boundary']:[])]);
   need((r.format==='xdev-supervised-request-1'||v2) && strings(r.allowed_scope) && r.allowed_scope.length>0 && r.allowed_scope.every(validRelative) && strings(r.forbidden_scope) && r.forbidden_scope.every(validRelative) && Array.isArray(r.excluded_scope) && r.excluded_scope.length===0, 'SUPERVISED_SCOPE_INVALID');
   const spec=parseD1UniqueJson(readRef(r.spec)) as any;
+  externalPolicy(spec,r.format,readRef);
   need(word(spec.goal)&&canonical(spec.acceptance_criteria)===canonical(r.acceptance_criteria)&&
     canonical(spec.allowed_scope)===canonical(r.allowed_scope)&&canonical(spec.forbidden_scope)===canonical(r.forbidden_scope)&&
     canonical(spec.quality_commands)===canonical(r.commands),'SUPERVISED_SPEC_REQUEST_MISMATCH');
@@ -81,12 +85,14 @@ function validateRequest(r: Request,projectId?:string,projectRoot?:string,contro
   }
   need(new Set(r.commands.map(c=>c.id)).size===r.commands.length && ids.every(id=>r.commands.some(c=>c.criteria.includes(id))), 'SUPERVISED_COMMAND_COVERAGE_MISSING');
   if(v4){
-    need(r.task_context!==null||r.memory_boundary!==null,'SUPERVISED_TASK_MATERIAL_REQUIRED');
+    if(v5){need(r.memory_boundary===null,'SUPERVISED_V5_MEMORY_BOUNDARY_UNSUPPORTED');need(r.task_context===null,'SUPERVISED_V5_TASK_CONTEXT_UNSUPPORTED');}
+    else need(r.task_context!==null||r.memory_boundary!==null,'SUPERVISED_TASK_MATERIAL_REQUIRED');
     if(r.memory_boundary!==null||spec.memory_boundary!==undefined)need(spec.memory_boundary!==undefined&&canonical(spec.memory_boundary)===canonical(r.memory_boundary),'SUPERVISED_SPEC_BOUNDARY_MISMATCH');
     if(r.memory_boundary!==null)validateBoundary(r.memory_boundary!,{projectId:projectId!,projectRoot:projectRoot!,controlRoot});
     if(r.task_context!==null){need(controlRoot,'SUPERVISED_TASK_CONTEXT_REQUIRED');validateTaskContext({projectId:projectId!,projectRoot:projectRoot!,controlRoot},r.task_context!,r.spec,readRef,r);}
   }
-  const preparation=v3?requireSupervisedPreparation({projectId:projectId!,projectRoot:projectRoot!},r.preparation!,readRef,r.spec):null;
+  const preparation=v3?requireSupervisedPreparation({projectId:projectId!,projectRoot:projectRoot!},r.preparation!,readRef,r.spec,phase):null;
+  if(v5)return inspectSupervisedRequirements(r,spec,preparation,readRef,projectId!,projectRoot!);
   const entry=v2?inspectSupervisedProfile(r,spec,readRef,projectId):null;
   return v3?{...entry!,preparation}:entry;
 }
@@ -110,8 +116,22 @@ function dotBinding(c:any,j:Job,manifest:string) {
   return {job_id:j.job_id,task_id:j.tasks[0]!.task_id,spec_sha256:c.request.spec.sha256,
     baseline_manifest_sha256:c.baseline_sha256,candidate_manifest_sha256:manifest};
 }
-function sessionShape(s:Session,quick=false) {
+function implementationProof(s:Subject,c:any,j:Job,source:Session|ExternalImplementationSource,current:Member[]){
+  if(isExternalImplementation(source))return verifyExternalImplementation(source,{requestFormat:c.request.format,spec:c.request.spec,jobId:j.job_id,taskId:j.tasks[0]!.task_id,
+    baseline:c.baseline,baselineSha:c.baseline_sha256,candidate:current,candidateSha:digest(current),projectRoot:s.projectRoot,controlRoot:s.controlRoot},{readRef,manifest:supervisedManifest});
+  proof(source,'implementation',true,false,dotBinding(c,j,digest(current)));
+  return {kind:'PUBLIC_SESSION' as const,authors:[source.session_ref],provenance:'COORDINATOR_TRANSFERRED_PUBLIC_TOOLS'};
+}
+function sourceCompatible(implementation:any,checker:Session){
+  need(isExternalImplementation(implementation)?checker.format==='xdev-supervised-public-session-1':checker.format===implementation.format,'SUPERVISED_SESSION_VERSION_MISMATCH');
+}
+function externalReviewShape(r:any){
+  exact(r,['format','job_id','role','session','manifest_sha256','decision','checks','scope_pass','preparation_conformance','review_burden_justified','implementation_source_conformance']);
+  need(typeof r.implementation_source_conformance==='boolean','SUPERVISED_BOOLEAN_REQUIRED:implementation_source_conformance');
+}
+function sessionShape(s:Session|ExternalImplementationSource,quick=false) {
   need(s&&typeof s==='object','SUPERVISED_SESSION_INVALID:session');
+  if(isExternalImplementation(s)){externalSourceShape(s);return;}
   exact(s,['format','role','session_ref','source_claim','native_authenticated','dispatch_request','dispatch_return','natural_final','natural_end','stop_requested',...(s.format==='xdev-supervised-public-session-2'?['completion_observation']:quick&&s.role==='qa'&&s.qa_continuation?['qa_continuation']:[])]);
 }
 function dotProof(s:Session,role:Session['role'],completed:boolean,b:any) {
@@ -141,6 +161,7 @@ function dotWriters(r:any,impl:string,manifest:string) {
   for(const name of status.writers){const matches=observed.agents.filter((a:any)=>a.agent_name===name);need(matches.length===1&&word(matches[0].agent_status?.completed),'SUPERVISED_DOT_WRITER_ACTIVE_OR_UNKNOWN');}
 }
 function proof(s: Session, role: Session['role'], completed: boolean, quick=false,binding?:any) {
+  need(!isExternalImplementation(s),'SUPERVISED_EXTERNAL_SOURCE_QUALITY_ROLE_UNSUPPORTED');
   if(s.format==='xdev-supervised-public-session-2')return dotProof(s,role,completed,binding);
   sessionShape(s,quick);
   need(s.format==='xdev-supervised-public-session-1'&&s.role===role&&word(s.session_ref)&&s.source_claim==='COORDINATOR_TRANSFERRED_PUBLIC_TOOLS'&&s.native_authenticated===false&&s.stop_requested===false, 'SUPERVISED_SESSION_INVALID');
@@ -151,12 +172,12 @@ function proof(s: Session, role: Session['role'], completed: boolean, quick=fals
   else need(s.natural_end===false&&s.natural_final===null,'SUPERVISED_QA_MUST_START_BEFORE_FINAL');
   return req.agent_type as string;
 }
-function quickEntry(c:any){return ['xdev-supervised-request-2','xdev-supervised-request-3','xdev-supervised-request-4'].includes(c.request.format)&&c.entry?.decision.selected_profile==='quick_verified';}
-function checkerSeparation(c:any,id:JobId,impl:string,review:Session,qa:Session,completed:boolean,manifestSha:string){
-  need(impl!==review.session_ref&&impl!==qa.session_ref,'SUPERVISED_INDEPENDENCE_REQUIRED');
+
+function checkerSeparation(c:any,id:JobId,impl:string|string[],review:Session,qa:Session,completed:boolean,manifestSha:string){
+  const authors=Array.isArray(impl)?impl:[impl];need(!authors.includes(review.session_ref)&&!authors.includes(qa.session_ref),'SUPERVISED_INDEPENDENCE_REQUIRED');
   if(review.session_ref!==qa.session_ref)return;
   need(review.format!=='xdev-supervised-public-session-2'&&qa.format!=='xdev-supervised-public-session-2','SUPERVISED_INDEPENDENCE_REQUIRED');
-  need(quickEntry(c),'SUPERVISED_INDEPENDENCE_REQUIRED');
+  need(allowsCombinedChecker(c),'SUPERVISED_INDEPENDENCE_REQUIRED');
   need(proof(review,'review',true,true)==='verifier'&&proof(qa,'qa',completed,true)==='verifier'&&
     canonical(review.dispatch_request)===canonical(qa.dispatch_request)&&canonical(review.dispatch_return)===canonical(qa.dispatch_return),'SUPERVISED_QUICK_CHECKER_SOURCE_MISMATCH');
   need(qa.qa_continuation,'SUPERVISED_QA_CONTINUATION_REQUIRED');
@@ -175,7 +196,9 @@ function checkerSeparation(c:any,id:JobId,impl:string,review:Session,qa:Session,
 }
 function open(s: Subject) { safePath(s.projectRoot);safePath(s.controlRoot);need(lstatSync(s.controlRoot).isDirectory(),'SUPERVISED_CONTROL_PARENT_REQUIRED');return new JobStore(productionJobRoot(s.controlRoot,s.projectId),{project_id:s.projectId,workspace_root:s.projectRoot}); }
 function evidence(store: JobStore, ref: EvidenceRef): any { need(ref.id===join(store.root,'evidence',ref.sha256+'.json'),'SUPERVISED_EVIDENCE_OUTSIDE_STORE');const bytes=file(ref.id);need(sha(bytes)===ref.sha256,'SUPERVISED_EVIDENCE_DRIFT');const value=parseD1UniqueJson(bytes.toString('utf8'));need(canonical(value)+'\n'===bytes.toString('utf8'),'SUPERVISED_EVIDENCE_INVALID');return value; }
-function contract(store: JobStore,j: Job) { need(!j.d1_intake&&j.tasks.length===1,'SUPERVISED_JOB_REQUIRED');const c=evidence(store,j.tasks[0]!.contract_ref);need(c.format==='xdev-supervised-contract-1','SUPERVISED_JOB_REQUIRED');const entry=validateRequest(c.request,j.project.project_id,j.project.workspace_root,dirname(store.root));if(entry){need(canonical(entry)===canonical(c.entry),'SUPERVISED_ENTRY_DECISION_DRIFT');const claim=parseD1UniqueJson(readRef(c.start_claim)) as any;need(claim.format==='xdev-supervised-start-consumed-1'&&canonical(claim.authorization_source)===canonical(entry.authorization.source)&&claim.request_sha256===c.source.sha256&&claim.project_id===j.project.project_id&&claim.project_root===j.project.workspace_root,'SUPERVISED_START_CLAIM_MISMATCH');}readRef(c.source);return c; }
+// A persisted Job has already admitted its initial inputs. Reopen the pinned
+// preparation and original entry without comparing mutable code to its initial hash.
+function contract(store: JobStore,j: Job) { need(!j.d1_intake&&j.tasks.length===1,'SUPERVISED_JOB_REQUIRED');const c=evidence(store,j.tasks[0]!.contract_ref);need(c.format==='xdev-supervised-contract-1','SUPERVISED_JOB_REQUIRED');const entry=validateRequest(c.request,j.project.project_id,j.project.workspace_root,dirname(store.root),'reopen');if(entry){need(canonical(entry)===canonical(c.entry),'SUPERVISED_ENTRY_DECISION_DRIFT');const claim=parseD1UniqueJson(readRef(c.start_claim)) as any;need(claim.format==='xdev-supervised-start-consumed-1'&&canonical(claim.authorization_source)===canonical(entry.authorization.source)&&claim.request_sha256===c.source.sha256&&claim.project_id===j.project.project_id&&claim.project_root===j.project.workspace_root,'SUPERVISED_START_CLAIM_MISMATCH');}readRef(c.source);return c; }
 function consumeStart(s:Subject,source:string,requestSha:string,entry:any){
   const dir=join(s.controlRoot,'supervised-start-consumed');safePath(dir);if(!existsSync(dir))try{mkdirSync(dir,{mode:0o700});}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;}safePath(dir);need(lstatSync(dir).isDirectory(),'SUPERVISED_START_DOMAIN_INVALID');
   const key=digest(entry.authorization.source),path=join(dir,key+'.json');safePath(path);
@@ -191,17 +214,25 @@ function scope(c: any,current: Member[]) {const before=new Map<string,string>(c.
 function checkManifest(r: any,current: Member[]) {need(hex(r.manifest_sha256)&&r.manifest_sha256===digest(current),'SUPERVISED_VERSION_DRIFT');}
 /** Read-only shape/version inspection. It grants no role decision, Job readiness
  * or execution permission; recordSupervised remains the stateful authority. */
-export function inspectSupervisedInput(s:Subject,kind:'request'|'record',source:string,requestFormat?:string,quick=false,boundary?:FileRef|null) {
+export function inspectSupervisedRequest(s:Subject,source:string,phase:'admission'|'reopen'='admission') {
   const r=json(source);
-  if(kind==='request') {const entry=validateRequest(r,s.projectId,s.projectRoot,s.controlRoot);inspectRequestHealth(s,r);return {kind,shape_checked:true,entry,role_decision:'NOT_EVALUATED',job_executability:'NOT_EVALUATED'};}
+  const entry=validateRequest(r,s.projectId,s.projectRoot,s.controlRoot,phase);
+  inspectRequestHealth(s,r);
+  return {kind:'request' as const,shape_checked:true,entry,role_decision:'NOT_EVALUATED',job_executability:'NOT_EVALUATED'};
+}
+export function inspectSupervisedInput(s:Subject,kind:'request'|'record',source:string,requestFormat?:string,quick=false,boundary?:FileRef|null) {
+  if(kind==='request') return inspectSupervisedRequest(s,source);
+  const r=json(source);
   need(r.format==='xdev-supervised-record-1'&&['implementation','review','qa'].includes(r.role),'SUPERVISED_RECORD_INVALID:format|role');
   const role=r.role;
-  const preparationFields=['xdev-supervised-request-3','xdev-supervised-request-4'].includes(requestFormat??'')||r.preparation_conformance!==undefined||r.review_burden_justified!==undefined?['preparation_conformance','review_burden_justified']:[];
-  exact(r,['format','job_id','role','session','manifest_sha256',...(r.session?.format==='xdev-supervised-public-session-2'?['writer_status']:[]),...(role==='implementation'?['job_release']:['decision','checks']),...(role==='review'?['scope_pass',...preparationFields]:role==='qa'?['qa_pass','qa_receipt']:[])]);
+  const preparationFields=['xdev-supervised-request-3','xdev-supervised-request-4','xdev-supervised-request-5'].includes(requestFormat??'')||r.preparation_conformance!==undefined||r.review_burden_justified!==undefined?['preparation_conformance','review_burden_justified']:[];
+  const sourceFields=role==='review'&&Object.hasOwn(r,'implementation_source_conformance')?['implementation_source_conformance']:[];
+  exact(r,['format','job_id','role','session','manifest_sha256',...(r.session?.format==='xdev-supervised-public-session-2'?['writer_status']:[]),...(role==='implementation'?['job_release']:['decision','checks']),...(role==='review'?['scope_pass',...preparationFields,...sourceFields]:role==='qa'?['qa_pass','qa_receipt']:[])]);
   need(typeof r.job_id==='string'&&/^job:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(r.job_id),'SUPERVISED_RECORD_INVALID:job_id');
-  need(r.session&&r.session.role===role&&['xdev-supervised-public-session-1','xdev-supervised-public-session-2'].includes(r.session.format),'SUPERVISED_SESSION_INVALID:session.role|format');
+  need(r.session&&r.session.role===role&&(['xdev-supervised-public-session-1','xdev-supervised-public-session-2'].includes(r.session.format)||(role==='implementation'&&isExternalImplementation(r.session))),'SUPERVISED_SESSION_INVALID:session.role|format');
   sessionShape(r.session,quick);
-  for(const key of ['natural_end','stop_requested','native_authenticated'])need(typeof r.session[key]==='boolean','SUPERVISED_BOOLEAN_REQUIRED:session.'+key);
+  for(const key of isExternalImplementation(r.session)?['native_authenticated']:['natural_end','stop_requested','native_authenticated'])need(typeof r.session[key]==='boolean','SUPERVISED_BOOLEAN_REQUIRED:session.'+key);
+  if(sourceFields.length)need(typeof r.implementation_source_conformance==='boolean','SUPERVISED_BOOLEAN_REQUIRED:implementation_source_conformance');
   if(role!=='implementation') {
     need(['PASS','FAIL','BLOCKED'].includes(r.decision)&&Array.isArray(r.checks),'SUPERVISED_DECISION_INCOMPLETE:decision|checks');
     for(const [i,c] of r.checks.entries()){exact(c,['id','passed','reason']);need(word(c.id)&&word(c.reason),'SUPERVISED_DECISION_INCOMPLETE:checks.'+i);need(typeof c.passed==='boolean','SUPERVISED_BOOLEAN_REQUIRED:checks.'+i+'.passed');}
@@ -210,20 +241,22 @@ export function inspectSupervisedInput(s:Subject,kind:'request'|'record',source:
   if(boundary)inspectRequestHealth(s,{memory_boundary:boundary});checkManifest(r,supervisedManifest(s.projectRoot,boundary));
   return {kind,shape_checked:true,manifest_checked:true,role_decision:'NOT_EVALUATED',job_executability:'NOT_EVALUATED',session_proof:'NOT_EVALUATED',record_contract:'JOB_SPECIFIC_REQUIREMENTS_NOT_EVALUATED'};
 }
-function independentDecision(r: any,c: any) {
+function independentDecision(r: any,c: any,external=false) {
   need(['PASS','FAIL','BLOCKED'].includes(r.decision)&&Array.isArray(r.checks)&&r.checks.length===c.request.acceptance_criteria.length,'SUPERVISED_DECISION_INCOMPLETE');
   const ids=c.request.acceptance_criteria.map((a:Criterion)=>a.id);need(new Set(r.checks.map((x:any)=>x.id)).size===ids.length&&r.checks.every((x:any)=>ids.includes(x.id)&&typeof x.passed==='boolean'&&word(x.reason)),'SUPERVISED_DECISION_INCOMPLETE');
   const natural=r.session.format==='xdev-supervised-public-session-2'?dotFinal(r.session):parseD1UniqueJson(readRef(r.session.natural_final)) as any;
   need(natural.decision===r.decision&&canonical(natural.checks)===canonical(r.checks),'SUPERVISED_FINAL_DECISION_MISMATCH');
   if(r.role==='review'){
+    if(external){externalReviewShape(r);need(natural.implementation_source_conformance===r.implementation_source_conformance,'SUPERVISED_EXTERNAL_SOURCE_REVIEW_MISMATCH');}
     need(typeof r.scope_pass==='boolean'&&natural.scope_pass===r.scope_pass,'SUPERVISED_REVIEW_INCOMPLETE');
-    if(['xdev-supervised-request-3','xdev-supervised-request-4'].includes(c.request.format))for(const key of ['preparation_conformance','review_burden_justified'])
+    if(['xdev-supervised-request-3','xdev-supervised-request-4','xdev-supervised-request-5'].includes(c.request.format))for(const key of ['preparation_conformance','review_burden_justified'])
       need(typeof r[key]==='boolean'&&natural[key]===r[key],'SUPERVISED_REVIEW_PREPARATION_INCOMPLETE');
   }
   else {need(typeof r.qa_pass==='boolean'&&natural.qa_pass===r.qa_pass&&(r.decision==='PASS')===r.qa_pass,'SUPERVISED_QA_DECISION_INVALID');
-    if(quickEntry(c)||r.session.format==='xdev-supervised-public-session-2')need(natural.qa_receipt&&r.qa_receipt&&canonical(natural.qa_receipt)===canonical(r.qa_receipt),'SUPERVISED_QA_FINAL_RECEIPT_MISMATCH');}
+    if(c.request.format==='xdev-supervised-request-5'||allowsCombinedChecker(c)||r.session.format==='xdev-supervised-public-session-2')need(natural.qa_receipt&&r.qa_receipt&&canonical(natural.qa_receipt)===canonical(r.qa_receipt),'SUPERVISED_QA_FINAL_RECEIPT_MISMATCH');}
   return r.decision==='PASS'&&r.checks.every((x:any)=>x.passed)&&
-    (r.role!=='review'||!['xdev-supervised-request-3','xdev-supervised-request-4'].includes(c.request.format)||(r.preparation_conformance===true&&r.review_burden_justified===true));
+    (!external||r.role!=='review'||r.implementation_source_conformance===true)&&
+    (r.role!=='review'||!['xdev-supervised-request-3','xdev-supervised-request-4','xdev-supervised-request-5'].includes(c.request.format)||(r.preparation_conformance===true&&r.review_burden_justified===true));
 }
 function receipt(store: JobStore,j: Job,value: any,outcome: 'VERIFIED'|'PARTIALLY_VERIFIED'|'STALE',checks: {requirement:string;passed:boolean;evidence_refs:EvidenceRef[]}[],expectedRevision?:number) {const ref=store.persistEvidence(value),t=j.tasks[0]!,command:JobCommand={kind:'VERIFICATION',task_id:t.task_id,receipt:{decision_ref:ref,authority_ref:t.contract_ref,subject_generation:t.generation,workspace_head:t.workspace.observed_head,outcome,checks}};if(expectedRevision===undefined)mutation(store,j.job_id,command);else store.mutate(j.job_id,expectedRevision,command);return ref;}
 function claimForRun(store: JobStore,j: Job,run: any) {
@@ -242,7 +275,7 @@ function checkedQaRun(store:JobStore,j:Job,c:any,run:any,claim:any) {
     q.format==='xdev-supervised-qa-request-1'&&q.job_id===j.job_id&&canonical(q.session)===canonical(run.value.session)&&
     q.manifest_sha256===run.value.manifest_sha256,'SUPERVISED_QA_RUN_SOURCE_MISMATCH');
   readRef(claim.value.source);readRef(run.value.source);
-  proof(q.session,'qa',false,quickEntry(c),dotBinding(c,j,run.value.manifest_sha256));
+  proof(q.session,'qa',false,allowsCombinedChecker(c),dotBinding(c,j,run.value.manifest_sha256));
   dotWriters(q,j.runs[0]!.worker_run.worker.worker_id,run.value.manifest_sha256);
   need(Array.isArray(run.value.outputs)&&run.value.outputs.length===c.request.commands.length&&
     run.value.global_descendant_closure==='NOT_CLAIMED','SUPERVISED_QA_OUTPUT_INVALID');
@@ -265,29 +298,31 @@ function checkedQaRun(store:JobStore,j:Job,c:any,run:any,claim:any) {
 }
 function recoveryContext(s:Subject,store:JobStore,j:Job){
   const c=contract(store,j),current=supervisedManifest(s.projectRoot,c.request.memory_boundary),manifest=digest(current);scope(c,current);
-  need(c.entry?.decision.selected_profile!=='prototype','SUPERVISED_RECOVERY_PROTOTYPE_UNSUPPORTED');
+  need(c.entry?.decision?.selected_profile!=='prototype','SUPERVISED_RECOVERY_PROTOTYPE_UNSUPPORTED');
   need(j.runs.length===1,'SUPERVISED_IMPLEMENTATION_REQUIRED');const implementation=evidence(store,j.runs[0]!.evidence_refs[0]!);
   readRef(implementation.source);readRef(implementation.record.job_release);checkManifest(implementation,current);
-  proof(implementation.record.session,'implementation',true,false,dotBinding(c,j,manifest));dotWriters(implementation.record,implementation.record.session.session_ref,manifest);
+  const implementationInfo=implementationProof(s,c,j,implementation.record.session,current);dotWriters(implementation.record,implementation.record.session.session_ref,manifest);
   const all=stages(store,j);for(const kind of ['xdev-supervised-review-1','xdev-supervised-qa-claim-1','xdev-supervised-qa-run-1','xdev-supervised-qa-final-1'])need(all.filter(x=>x.value.format===kind).length<=1,'SUPERVISED_DUPLICATE_STAGE');
   const review=latest(store,j,'xdev-supervised-review-1'),claim=latest(store,j,'xdev-supervised-qa-claim-1'),run=latest(store,j,'xdev-supervised-qa-run-1'),final=latest(store,j,'xdev-supervised-qa-final-1');
   need(review?.value.passed===true,'SUPERVISED_REVIEW_PASS_REQUIRED');readRef(review.value.source);checkManifest(review.value,current);
-  need(review.value.record.session.format===implementation.record.session.format,'SUPERVISED_SESSION_VERSION_MISMATCH');proof(review.value.record.session,'review',true,quickEntry(c),dotBinding(c,j,manifest));dotWriters(review.value.record,implementation.record.session.session_ref,manifest);
-  need(independentDecision(review.value.record,c)&&review.value.record.scope_pass===true,'SUPERVISED_REVIEW_PASS_REQUIRED');
-  if(claim){readRef(claim.value.source);checkManifest(claim.value,current);proof(claim.value.session,'qa',false,quickEntry(c),dotBinding(c,j,manifest));need(claim.value.prototype===false&&claim.value.job_id===j.job_id,'SUPERVISED_QA_CLAIM_MISMATCH');}
+  sourceCompatible(implementation.record.session,review.value.record.session);proof(review.value.record.session,'review',true,allowsCombinedChecker(c),dotBinding(c,j,manifest));dotWriters(review.value.record,implementation.record.session.session_ref,manifest);
+  need(!implementationInfo.authors.includes(review.value.record.session.session_ref),'SUPERVISED_INDEPENDENCE_REQUIRED');
+  need(independentDecision(review.value.record,c,implementationInfo.kind==='EXTERNAL_ARTIFACT')&&review.value.record.scope_pass===true,'SUPERVISED_REVIEW_PASS_REQUIRED');
+  if(claim){readRef(claim.value.source);checkManifest(claim.value,current);proof(claim.value.session,'qa',false,allowsCombinedChecker(c),dotBinding(c,j,manifest));need(claim.value.prototype===false&&claim.value.job_id===j.job_id,'SUPERVISED_QA_CLAIM_MISMATCH');
+    if(implementationInfo.kind==='EXTERNAL_ARTIFACT'){sourceCompatible(implementation.record.session,claim.value.session);checkerSeparation(c,j.job_id,implementationInfo.authors,review.value.record.session,claim.value.session,false,manifest);}}
   if(run){need(claim,'SUPERVISED_QA_CLAIM_MISMATCH');checkManifest(run.value,current);checkedQaRun(store,j,c,run,claim);}
-  return{c,current,manifest,implementation,review,claim,run,final};
+  return{c,current,manifest,implementation,implementationInfo,review,claim,run,final};
 }
 function originalQaRecord(s:Subject,store:JobStore,j:Job,ctx:ReturnType<typeof recoveryContext>,source:FileRef){
-  readRef(source);inspectSupervisedInput(s,'record',source.path,ctx.c.request.format,quickEntry(ctx.c),ctx.c.request.memory_boundary);const r=json(source.path);
+  readRef(source);inspectSupervisedInput(s,'record',source.path,ctx.c.request.format,allowsCombinedChecker(ctx.c),ctx.c.request.memory_boundary);const r=json(source.path);
   need(r.role==='qa'&&r.job_id===j.job_id&&ctx.run&&ctx.claim,'SUPERVISED_QA_RECEIPT_MISMATCH');
-  proof(r.session,'qa',true,quickEntry(ctx.c),dotBinding(ctx.c,j,ctx.manifest));dotWriters(r,ctx.implementation.record.session.session_ref,ctx.manifest);
-  need(r.session.format===ctx.implementation.record.session.format,'SUPERVISED_SESSION_VERSION_MISMATCH');
-  checkerSeparation(ctx.c,j.job_id,ctx.implementation.record.session.session_ref,ctx.review!.value.record.session,r.session,true,ctx.manifest);
+  proof(r.session,'qa',true,allowsCombinedChecker(ctx.c),dotBinding(ctx.c,j,ctx.manifest));dotWriters(r,ctx.implementation.record.session.session_ref,ctx.manifest);
+  sourceCompatible(ctx.implementation.record.session,r.session);
+  checkerSeparation(ctx.c,j.job_id,ctx.implementationInfo.authors,ctx.review!.value.record.session,r.session,true,ctx.manifest);
   need(canonical(r.qa_receipt)===canonical(ctx.run.ref)&&r.session.session_ref===ctx.run.value.session.session_ref,'SUPERVISED_QA_RECEIPT_MISMATCH');
   // Preserve ordinary legacy full-governance's session_ref binding. Quick and
   // public-session-v2 already bind the complete active/completed session pair.
-  if(quickEntry(ctx.c)||r.session.format==='xdev-supervised-public-session-2')need(canonical({...r.session,natural_final:null,natural_end:false,...(r.session.format==='xdev-supervised-public-session-2'?{completion_observation:null}:{})})===canonical(ctx.run.value.session),'SUPERVISED_QA_SESSION_MISMATCH');
+  if(ctx.c.request.format==='xdev-supervised-request-5'||allowsCombinedChecker(ctx.c)||r.session.format==='xdev-supervised-public-session-2')need(canonical({...r.session,natural_final:null,natural_end:false,...(r.session.format==='xdev-supervised-public-session-2'?{completion_observation:null}:{})})===canonical(ctx.run.value.session),'SUPERVISED_QA_SESSION_MISMATCH');
   const decisionPass=independentDecision(r,ctx.c);return{r,passed:ctx.run.value.passed===true&&decisionPass&&r.qa_pass===true};
 }
 type FinalExpected={revision:number;head_sha256:string};
@@ -356,47 +391,57 @@ export function inspectSupervisedRecovery(s:Subject,id:JobId,record?:FileRef){
 }
 
 export function startSupervised(s: Subject, source: string) {
-  const bytes=file(source),request=json(source) as Request;const entry=validateRequest(request,s.projectId,s.projectRoot,s.controlRoot);assertSupervisedWindow(entry);inspectRequestHealth(s,request);const baseline=supervisedManifest(s.projectRoot,request.memory_boundary),store=open(s);
+  const bytes=file(source),request=json(source) as Request;const entry=validateRequest(request,s.projectId,s.projectRoot,s.controlRoot);assertSupervisedWindow(entry);inspectRequestHealth(s,request);const baseline=supervisedManifest(s.projectRoot,request.memory_boundary);
+  const sourcePolicy=externalPolicy(parseD1UniqueJson(readRef(request.spec)),request.format,readRef);externalInputSubset(sourcePolicy,baseline);const store=open(s);
   const startClaim=entry?consumeStart(s,source,sha(bytes),entry):null;
   const value={format:'xdev-supervised-contract-1',source:{path:source,sha256:sha(bytes)},request,baseline,baseline_sha256:digest(baseline),...(entry?{entry,start_claim:startClaim}:{})};
   const encoded=canonical(value)+'\n',ref={id:join(store.root,'evidence',sha(encoded)+'.json'),sha256:sha(encoded)},controls={budget_ref:ref,control_ref:ref,allocation_ref:ref};
-  const created=store.createJob({tasks:[{key:'supervised-code-quality',contract_ref:ref,dependency_keys:[],workspace:{workspace_id:s.projectId,repository_id:s.projectId,base_revision:digest(baseline),branch_ref:null,worktree_ref:null,observed_head:digest(baseline),allowed_scope_ref:ref,forbidden_scope_ref:ref,mutability:'MUTABLE'},verification_required:entry?.decision.selected_profile==='prototype'?['implementation','self-check']:['review','qa-execution','qa-session'],control_refs:controls}],control_refs:controls,handoff_refs:[],context_pack_refs:[]},-1);
+  const created=store.createJob({tasks:[{key:'supervised-code-quality',contract_ref:ref,dependency_keys:[],workspace:{workspace_id:s.projectId,repository_id:s.projectId,base_revision:digest(baseline),branch_ref:null,worktree_ref:null,observed_head:digest(baseline),allowed_scope_ref:ref,forbidden_scope_ref:ref,mutability:'MUTABLE'},verification_required:(entry as any)?.requirements?.required_checks??((entry as any)?.decision?.selected_profile==='prototype'?['implementation','self-check']:['review','qa-execution','qa-session']),control_refs:controls}],control_refs:controls,handoff_refs:[],context_pack_refs:[]},-1);
   store.persistEvidence(value);mutation(store,created.job_id,{kind:'JOB_STATE',state:'PLANNING',result_refs:[]});
-  return currentProgressResult(s,created.job_id,{...created,task_id:store.getJob(created.job_id).tasks[0]!.task_id,revision:store.getJob(created.job_id).revision,mode:'supervised',entry,preparation_verified:['xdev-supervised-request-3','xdev-supervised-request-4'].includes(request.format),baseline_sha256:digest(baseline),next_host_action:{role:'implementation',action:'DISPATCH_SEPARATE_PUBLIC_WORKER_THEN_RECORD_NATURAL_FINAL'},strict_d1_pass:false});
+  return currentProgressResult(s,created.job_id,{...created,task_id:store.getJob(created.job_id).tasks[0]!.task_id,revision:store.getJob(created.job_id).revision,mode:'supervised',entry,preparation_verified:['xdev-supervised-request-3','xdev-supervised-request-4','xdev-supervised-request-5'].includes(request.format),baseline_sha256:digest(baseline),next_host_action:request.format==='xdev-supervised-request-5'?{role:'implementation',action:sourcePolicy?'HOST_IMPLEMENT_OR_ADOPT_EXTERNAL_ARTIFACT_AND_RECORD_SOURCE':'HOST_IMPLEMENT_AND_RECORD_ORIGINAL_NATURAL_FINAL',process_owner:'HOST',automatic_dispatch:false}:{role:'implementation',action:'DISPATCH_SEPARATE_PUBLIC_WORKER_THEN_RECORD_NATURAL_FINAL'},strict_d1_pass:false});
 }
 export function recordSupervised(s: Subject,id: JobId,source: string) {
   const store=open(s),view=store.inspectD1Journal(id),j=view.job,c=contract(store,j),r=json(source),sourceRef={path:source,sha256:sha(file(source))};
   inspectRequestHealth(s,c.request);
-  if(r.role==='qa'){need(c.entry?.decision.selected_profile!=='prototype','SUPERVISED_PROTOTYPE_NO_FORMAL_RECORD');return finalizeQa(s,id,{path:source,sha256:sha(file(source))},{revision:view.revision,head_sha256:view.head_sha256});}
+  if(r.role==='qa'){need(c.entry?.decision?.selected_profile!=='prototype','SUPERVISED_PROTOTYPE_NO_FORMAL_RECORD');return finalizeQa(s,id,{path:source,sha256:sha(file(source))},{revision:view.revision,head_sha256:view.head_sha256});}
   const inspect=(job:Job)=>{
     const c=contract(store,job),current=supervisedManifest(s.projectRoot,c.request.memory_boundary),t=job.tasks[0]!;
     need(sha(file(source))===sourceRef.sha256&&canonical(json(source))===canonical(r),'SUPERVISED_RECORD_ORIGINAL_SOURCE_DRIFT');
-    need(!(r.session?.format==='xdev-supervised-public-session-2'&&c.entry?.decision.selected_profile==='prototype'),'SUPERVISED_DOT_PROTOTYPE_UNSUPPORTED');
+    need(!(r.session?.format==='xdev-supervised-public-session-2'&&c.entry?.decision?.selected_profile==='prototype'),'SUPERVISED_DOT_PROTOTYPE_UNSUPPORTED');
     need(r.format==='xdev-supervised-record-1'&&r.job_id===id&&['implementation','review'].includes(r.role),'SUPERVISED_RECORD_INVALID');
-    proof(r.session,r.role,true,quickEntry(c),dotBinding(c,job,digest(current)));dotWriters(r,job.runs[0]?.worker_run.worker.worker_id??r.session.session_ref,digest(current));scope(c,current);checkManifest(r,current);
-    need(c.entry?.decision.selected_profile!=='prototype'||r.role==='implementation','SUPERVISED_PROTOTYPE_NO_FORMAL_RECORD');
+    let implementationInfo:ReturnType<typeof implementationProof>;
+    if(r.role==='implementation'){
+      if(isExternalImplementation(r.session))exact(r,['format','job_id','role','session','manifest_sha256','job_release']);
+      implementationInfo=implementationProof(s,c,job,r.session,current);
+    }else proof(r.session,'review',true,allowsCombinedChecker(c),dotBinding(c,job,digest(current)));
+    dotWriters(r,job.runs[0]?.worker_run.worker.worker_id??r.session.session_ref,digest(current));scope(c,current);checkManifest(r,current);
+    need(c.entry?.decision?.selected_profile!=='prototype'||r.role==='implementation','SUPERVISED_PROTOTYPE_NO_FORMAL_RECORD');
     if(r.role==='implementation'){
       const release=parseD1UniqueJson(readRef(r.job_release)) as any;need(release.job_id===id&&release.task_name===r.session.session_ref&&word(release.message),'SUPERVISED_JOB_RELEASE_MISSING');
     }else{
       const impl=job.runs[0]?.worker_run.worker.worker_id;need(impl&&impl!==r.session.session_ref,'SUPERVISED_INDEPENDENCE_REQUIRED');
-      const implementation=evidence(store,job.runs[0]!.evidence_refs[0]!);need(r.session.format===implementation.record.session.format,'SUPERVISED_SESSION_VERSION_MISMATCH');checkManifest(implementation,current);proof(implementation.record.session,'implementation',true,false,dotBinding(c,job,digest(current)));readRef(implementation.source);
+      const implementation=evidence(store,job.runs[0]!.evidence_refs[0]!);sourceCompatible(implementation.record.session,r.session);checkManifest(implementation,current);
+      implementationInfo=implementationProof(s,c,job,implementation.record.session,current);need(!implementationInfo.authors.includes(r.session.session_ref),'SUPERVISED_INDEPENDENCE_REQUIRED');readRef(implementation.source);
+      // Validate the complete review even when scope_pass is false/null. A
+      // boolean short circuit must not persist malformed unknown decisions.
+      independentDecision(r,c,implementationInfo.kind==='EXTERNAL_ARTIFACT');
     }
-    return{c,current,t};
+    return{c,current,t,implementationInfo:implementationInfo!};
   };
   const original=(value:any)=>need(canonical(value.source)===canonical(sourceRef)&&canonical(value.record)===canonical(r)&&value.manifest_sha256===r.manifest_sha256,'SUPERVISED_RECORD_IDEMPOTENCY_CONFLICT');
   const implementationResult=(job:Job,ref:EvidenceRef,replayed:boolean)=>({job_id:id,manifest_sha256:r.manifest_sha256,implementation_ref:ref,replayed,
-    next_host_action:job.tasks[0]!.state==='REVIEWING'&&!latest(store,job,'xdev-supervised-review-1')?(c.entry?.decision.selected_profile==='prototype'?{role:'implementation',action:'RUN_SELF_CHECK_CLI'}:quickEntry(c)&&r.session.format!=='xdev-supervised-public-session-2'?{role:'review',action:'DISPATCH_INDEPENDENT_REVIEW',allowed_agent_types:['reviewer','verifier'],same_verifier_may_continue_qa:true}:{role:'review',action:'DISPATCH_INDEPENDENT_REVIEW'}):null,strict_d1_pass:false});
+    next_host_action:job.tasks[0]!.state==='REVIEWING'&&!latest(store,job,'xdev-supervised-review-1')?(c.entry?.decision?.selected_profile==='prototype'?{role:'implementation',action:'RUN_SELF_CHECK_CLI'}:allowsCombinedChecker(c)&&r.session.format!=='xdev-supervised-public-session-2'?{role:'review',action:'DISPATCH_INDEPENDENT_REVIEW',allowed_agent_types:['reviewer','verifier'],same_verifier_may_continue_qa:true}:{role:'review',action:'DISPATCH_INDEPENDENT_REVIEW'}):null,strict_d1_pass:false});
   const reviewResult=(job:Job,ref:EvidenceRef,passed:boolean,replayed:boolean)=>({job_id:id,review_passed:passed,review_ref:ref,replayed,
-    next_host_action:passed&&job.tasks[0]!.state==='TESTING'&&!latest(store,job,'xdev-supervised-qa-claim-1')?(quickEntry(c)&&r.session.format!=='xdev-supervised-public-session-2'?{role:'qa',action:'CONTINUE_VERIFIER_OR_DISPATCH_INDEPENDENT_QA_TO_EXECUTE_CLI',same_verifier_may_continue:proof(r.session,'review',true,true,dotBinding(c,job,r.manifest_sha256))==='verifier',distinct_natural_final_required:true}:{role:'qa',action:'DISPATCH_DIFFERENT_QA_TO_EXECUTE_CLI'}):null,strict_d1_pass:false});
+    next_host_action:passed&&job.tasks[0]!.state==='TESTING'&&!latest(store,job,'xdev-supervised-qa-claim-1')?(allowsCombinedChecker(c)&&r.session.format!=='xdev-supervised-public-session-2'?{role:'qa',action:'CONTINUE_VERIFIER_OR_DISPATCH_INDEPENDENT_QA_TO_EXECUTE_CLI',same_verifier_may_continue:proof(r.session,'review',true,true,dotBinding(c,job,r.manifest_sha256))==='verifier',distinct_natural_final_required:true}:{role:'qa',action:'DISPATCH_DIFFERENT_QA_TO_EXECUTE_CLI'}):null,strict_d1_pass:false});
   const completed=(job:Job,replayed=true):ReturnType<typeof implementationResult>|ReturnType<typeof reviewResult>|null=>{
-    const {t}=inspect(job);
+    const {t,implementationInfo}=inspect(job);
     if(r.role==='implementation'){
       const run=job.runs[0];if(!run)return null;need(job.runs.length===1,'SUPERVISED_IMPLEMENTATION_ALREADY_RECORDED');
       need(run.evidence_refs[0],'SUPERVISED_IMPLEMENTATION_ORIGINAL_RECORD_UNAVAILABLE');const value=evidence(store,run.evidence_refs[0]!);need(value.format==='xdev-supervised-implementation-1','SUPERVISED_IMPLEMENTATION_ORIGINAL_RECORD_UNAVAILABLE');original(value);
       return run.state==='SUCCEEDED'&&['REVIEWING','TESTING','VERIFIED'].includes(t.state)?implementationResult(job,run.evidence_refs[0]!,replayed):null;
     }
     const saved=latest(store,job,'xdev-supervised-review-1');if(!saved)return null;original(saved.value);
-    const passed=r.scope_pass===true&&independentDecision(r,c);need(saved.value.passed===passed,'SUPERVISED_RECORD_IDEMPOTENCY_CONFLICT');
+    const passed=r.scope_pass===true&&independentDecision(r,c,implementationInfo.kind==='EXTERNAL_ARTIFACT');need(saved.value.passed===passed,'SUPERVISED_RECORD_IDEMPOTENCY_CONFLICT');
     if(passed&&t.state==='REVIEWING')return null;
     need(!passed||['TESTING','VERIFIED'].includes(t.state),'SUPERVISED_REVIEW_PARTIAL_STATE_BLOCKED');return reviewResult(job,saved.ref,passed,replayed);
   };
@@ -405,7 +450,7 @@ export function recordSupervised(s: Subject,id: JobId,source: string) {
   const result=store.withSupervisedRecord(id,fresh=>{
     const done=completed(fresh.job);if(done)return{role:r.role,expected_revision:view.revision,expected_head_sha256:view.head_sha256,commands:[],result:done,revalidate:()=>{}};
     need(fresh.revision===view.revision&&fresh.head_sha256===view.head_sha256,'SUPERVISED_RECORD_CAS_MISMATCH');
-    const {c,current,t}=inspect(fresh.job);assertSupervisedWindow(c.entry);
+    const {c,current,t,implementationInfo}=inspect(fresh.job);assertSupervisedWindow(c.entry);
     const revalidate=()=>{const value=inspect(fresh.job);assertSupervisedWindow(value.c.entry);};
     let commands:JobCommand[]=[];
     if(r.role==='implementation'){
@@ -413,7 +458,7 @@ export function recordSupervised(s: Subject,id: JobId,source: string) {
       if(!old){
         need(t.state==='PENDING','SUPERVISED_IMPLEMENTATION_ORIGINAL_RECORD_UNAVAILABLE');
         ref=store.persistEvidence({format:'xdev-supervised-implementation-1',record:r,source:sourceRef,manifest:current,manifest_sha256:digest(current)});run_id=`run:${randomUUID()}`;
-        commands=[{kind:'TASK_STATE',task_id:t.task_id,state:'READY'},{kind:'INTENT',task_id:t.task_id,run_id,intent_id:randomUUID(),attempt:'INITIAL',worker_run:{worker:{worker_id:r.session.session_ref,adapter_id:'supervised-public-session'},adapter_metadata:{provenance:'COORDINATOR_TRANSFERRED_PUBLIC_TOOLS'}}},{kind:'RUN_OBSERVATION',run_id,state:'ACTIVE',evidence_refs:[ref],reconciliation_ref:null},{kind:'TASK_STATE',task_id:t.task_id,state:'RUNNING'},{kind:'RUN_OBSERVATION',run_id,state:'SUCCEEDED',evidence_refs:[ref],reconciliation_ref:null},{kind:'TASK_STATE',task_id:t.task_id,state:'REVIEWING'}];
+        commands=[{kind:'TASK_STATE',task_id:t.task_id,state:'READY'},{kind:'INTENT',task_id:t.task_id,run_id,intent_id:randomUUID(),attempt:'INITIAL',worker_run:{worker:{worker_id:r.session.session_ref,adapter_id:implementationInfo.kind==='EXTERNAL_ARTIFACT'?'external-artifact':'supervised-public-session'},adapter_metadata:{provenance:implementationInfo.provenance}}},{kind:'RUN_OBSERVATION',run_id,state:'ACTIVE',evidence_refs:[ref],reconciliation_ref:null},{kind:'TASK_STATE',task_id:t.task_id,state:'RUNNING'},{kind:'RUN_OBSERVATION',run_id,state:'SUCCEEDED',evidence_refs:[ref],reconciliation_ref:null},{kind:'TASK_STATE',task_id:t.task_id,state:'REVIEWING'}];
       }else{
         need(old.evidence_refs[0],'SUPERVISED_IMPLEMENTATION_ORIGINAL_RECORD_UNAVAILABLE');ref=old.evidence_refs[0]!;original(evidence(store,ref));run_id=old.run_id;
         need((t.state==='READY'&&old.state==='ACTIVE')||(t.state==='RUNNING'&&['ACTIVE','SUCCEEDED'].includes(old.state)),'SUPERVISED_IMPLEMENTATION_PARTIAL_STATE_BLOCKED');
@@ -423,29 +468,28 @@ export function recordSupervised(s: Subject,id: JobId,source: string) {
       }
     }else{
       const saved=latest(store,fresh.job,'xdev-supervised-review-1');
-      if(saved){original(saved.value);need(saved.value.passed===true&&r.scope_pass===true&&independentDecision(r,c)&&t.state==='REVIEWING','SUPERVISED_REVIEW_ALREADY_RECORDED');commands=[{kind:'TASK_STATE',task_id:t.task_id,state:'TESTING'}];}
+      if(saved){original(saved.value);need(saved.value.passed===true&&r.scope_pass===true&&independentDecision(r,c,implementationInfo.kind==='EXTERNAL_ARTIFACT')&&t.state==='REVIEWING','SUPERVISED_REVIEW_ALREADY_RECORDED');commands=[{kind:'TASK_STATE',task_id:t.task_id,state:'TESTING'}];}
       else{
-        need(t.state==='REVIEWING','SUPERVISED_REVIEW_ALREADY_RECORDED');
-        const passed=independentDecision(r,c)&&r.scope_pass===true;
-        const value={format:'xdev-supervised-review-1',record:r,source:sourceRef,manifest_sha256:digest(current),passed};
-        const ref=store.persistEvidence(value);
+        need(t.state==='REVIEWING','SUPERVISED_REVIEW_ALREADY_RECORDED');const passed=r.scope_pass===true&&independentDecision(r,c,implementationInfo.kind==='EXTERNAL_ARTIFACT'),value={format:'xdev-supervised-review-1',record:r,source:sourceRef,manifest_sha256:digest(current),passed},ref=store.persistEvidence(value);
         commands=[{kind:'VERIFICATION',task_id:t.task_id,receipt:{decision_ref:ref,authority_ref:t.contract_ref,subject_generation:t.generation,workspace_head:t.workspace.observed_head,outcome:passed?'PARTIALLY_VERIFIED':'STALE',checks:[{requirement:'review',passed,evidence_refs:passed?[ref]:[]}]}}];
         if(passed)commands.push({kind:'TASK_STATE',task_id:t.task_id,state:'TESTING'});
       }
     }
     return{role:r.role,expected_revision:view.revision,expected_head_sha256:view.head_sha256,commands,result:null,revalidate};
-  },c.entry?.decision.selected_profile==='prototype'?undefined:fn=>withSupervisedWriterLock(store.root,id,fn));
+  },c.entry?.decision?.selected_profile==='prototype'?undefined:fn=>withSupervisedWriterLock(store.root,id,fn));
   return currentProgressResult(s,id,result??completed(store.getJob(id),false)!);
 }
 export function qaSupervised(s: Subject,id: JobId,source: string,selfCheck=false) {
   const store=open(s),j=store.getJob(id),c=contract(store,j),r=json(source),current=supervisedManifest(s.projectRoot,c.request.memory_boundary),review=latest(store,j,'xdev-supervised-review-1');
   inspectRequestHealth(s,c.request);
-  const prototype=c.entry?.decision.selected_profile==='prototype';need(!(prototype&&r.session?.format==='xdev-supervised-public-session-2'),'SUPERVISED_DOT_PROTOTYPE_UNSUPPORTED');need(prototype===selfCheck,'SUPERVISED_PROFILE_EXECUTION_MISMATCH');assertSupervisedWindow(c.entry);
-  if(!prototype&&review)need(independentDecision(review.value.record,c)&&review.value.record.scope_pass===true,'SUPERVISED_REVIEW_PASS_REQUIRED');
-  need(r.format===(prototype?'xdev-supervised-self-check-request-1':'xdev-supervised-qa-request-1')&&r.job_id===id&&(prototype?j.tasks[0]!.state==='REVIEWING':j.tasks[0]!.state==='TESTING'&&review?.value.passed===true),'SUPERVISED_REVIEW_PASS_REQUIRED');proof(r.session,prototype?'implementation':'qa',prototype,quickEntry(c),dotBinding(c,j,digest(current)));dotWriters(r,j.runs[0]!.worker_run.worker.worker_id,digest(current));checkManifest(r,current);scope(c,current);
-  if(prototype)need(r.session.session_ref===j.runs[0]!.worker_run.worker.worker_id,'SUPERVISED_INDEPENDENCE_REQUIRED');else checkerSeparation(c,id,j.runs[0]!.worker_run.worker.worker_id,review!.value.record.session,r.session,false,digest(current));
-  const implementation=evidence(store,j.runs[0]!.evidence_refs[0]!);need(r.session.format===implementation.record.session.format,'SUPERVISED_SESSION_VERSION_MISMATCH');readRef(implementation.source);proof(implementation.record.session,'implementation',true,false,dotBinding(c,j,digest(current)));readRef(implementation.record.job_release);checkManifest(implementation,current);
-  need(!latest(store,j,'xdev-supervised-qa-claim-1')&&!latest(store,j,'xdev-supervised-qa-run-1'),'SUPERVISED_QA_ALREADY_CLAIMED');if(!prototype){proof(review!.value.record.session,'review',true,quickEntry(c),dotBinding(c,j,digest(current)));readRef(review!.value.source);checkManifest(review!.value,current);
+  const prototype=c.entry?.decision?.selected_profile==='prototype';need(!(prototype&&r.session?.format==='xdev-supervised-public-session-2'),'SUPERVISED_DOT_PROTOTYPE_UNSUPPORTED');need(prototype===selfCheck,'SUPERVISED_PROFILE_EXECUTION_MISMATCH');assertSupervisedWindow(c.entry);
+  const implRef=j.runs[0]?.evidence_refs[0],implementation=implRef?evidence(store,implRef):null,external=isExternalImplementation(implementation?.record.session);
+  if(!prototype&&review)need(independentDecision(review.value.record,c,external)&&review.value.record.scope_pass===true,'SUPERVISED_REVIEW_PASS_REQUIRED');
+  need(r.format===(prototype?'xdev-supervised-self-check-request-1':'xdev-supervised-qa-request-1')&&r.job_id===id&&(prototype?j.tasks[0]!.state==='REVIEWING':j.tasks[0]!.state==='TESTING'&&review?.value.passed===true),'SUPERVISED_REVIEW_PASS_REQUIRED');proof(r.session,prototype?'implementation':'qa',prototype,allowsCombinedChecker(c),dotBinding(c,j,digest(current)));dotWriters(r,j.runs[0]!.worker_run.worker.worker_id,digest(current));checkManifest(r,current);scope(c,current);
+  need(implementation,'SUPERVISED_IMPLEMENTATION_REQUIRED');const implementationInfo=implementationProof(s,c,j,implementation.record.session,current);
+  if(prototype)need(r.session.session_ref===j.runs[0]!.worker_run.worker.worker_id,'SUPERVISED_INDEPENDENCE_REQUIRED');else checkerSeparation(c,id,implementationInfo.authors,review!.value.record.session,r.session,false,digest(current));
+  sourceCompatible(implementation.record.session,r.session);readRef(implementation.source);readRef(implementation.record.job_release);checkManifest(implementation,current);
+  need(!latest(store,j,'xdev-supervised-qa-claim-1')&&!latest(store,j,'xdev-supervised-qa-run-1'),'SUPERVISED_QA_ALREADY_CLAIMED');if(!prototype){proof(review!.value.record.session,'review',true,allowsCombinedChecker(c),dotBinding(c,j,digest(current)));readRef(review!.value.source);checkManifest(review!.value,current);
     const writer=inspectSupervisedWriterCapability(store.root,id);need(writer.status==='SUPPORTED',writer.status==='UNSUPPORTED'?writer.code:'SUPERVISED_WRITER_CAPABILITY_UNAVAILABLE');}
   // The original revision is the atomic compare-and-append boundary. Never
   // refresh it after checking for a claim. A crash consumes this Job's QA slot.
@@ -464,29 +508,49 @@ export function qaSupervised(s: Subject,id: JobId,source: string,selfCheck=false
   return currentProgressResult(s,id,{job_id:id,qa_receipt:ref,commands_passed:passed,delivery_allowed:false,next_host_action:prototype?null:{role:'qa',action:'AWAIT_NATURAL_FINAL_THEN_RECORD_QA'},status:prototype?'PROTOTYPE_UNVERIFIED':'QA_EXECUTED_PENDING_FINAL',strict_d1_pass:false});
 }
 export function querySupervised(s: Subject,id: JobId) {
-  const store=open(s),j=store.getJob(id);let reasons:string[]=[],version:string|null=null,entry:any=null,prototype=false,selfCheckState='NOT_RUN';
+  const store=open(s),j=store.getJob(id);let reasons:string[]=[],version:string|null=null,entry:any=null,prototype=false,selfCheckState='NOT_RUN',provenance='COORDINATOR_TRANSFERRED_PUBLIC_TOOLS';
   let progress:PrimaryProgress={binding:'UNKNOWN',persisted_state:j.state,profile:null,authorization:'UNKNOWN',permissions:{source:'CORE_CONTRACT_NO_ADDITIONAL_LOCAL_GATE',write_jobs:true,execute_qa:true},implementation_recorded:null,review_recorded:null,review_passed:null,qa_claimed:null,qa_run:'UNKNOWN',qa_final_recorded:null,delivery_verified:null};
-  try{const c=contract(store,j);inspectRequestHealth(s,c.request);const current=supervisedManifest(s.projectRoot,c.request.memory_boundary);entry=c.entry??null;prototype=entry?.decision.selected_profile==='prototype';version=digest(current);scope(c,current);
-    progress.profile=entry?.decision.selected_profile??null;try{assertSupervisedWindow(entry);progress.authorization=entry?'CURRENT':'UNKNOWN';}catch{progress.authorization='STOPPED_OR_EXPIRED';}
+  try{const c=contract(store,j);inspectRequestHealth(s,c.request);const current=supervisedManifest(s.projectRoot,c.request.memory_boundary);entry=c.entry??null;prototype=entry?.decision?.selected_profile==='prototype';version=digest(current);scope(c,current);
+    if(c.request.format==='xdev-supervised-request-5')progress.check_requirements=entry.requirements;progress.profile=entry?.decision?.selected_profile??null;try{assertSupervisedWindow(entry);progress.authorization=entry?'CURRENT':'UNKNOWN';}catch{progress.authorization='STOPPED_OR_EXPIRED';}
     if(j.runs.length===0){need(stages(store,j).length===0,'SUPERVISED_STAGE_WITHOUT_IMPLEMENTATION');progress={...progress,binding:'CHECKED',implementation_recorded:false,review_recorded:false,review_passed:null,qa_claimed:false,qa_run:'NOT_RUN',qa_final_recorded:false};}
     let reviewed:boolean|null=null;
-    need(j.runs.length===1,'IMPLEMENTATION_MISSING');const impl=evidence(store,j.runs[0]!.evidence_refs[0]!);readRef(impl.source);readRef(impl.record.job_release);proof(impl.record.session,'implementation',true,false,dotBinding(c,j,digest(current)));dotWriters(impl.record,impl.record.session.session_ref,digest(current));checkManifest(impl,current);
-     for(const stage of stages(store,j)){readRef(stage.value.source);checkManifest(stage.value,current);if(stage.value.record?.session){need(stage.value.record.session.format===impl.record.session.format,'SUPERVISED_SESSION_VERSION_MISMATCH');proof(stage.value.record.session,stage.value.record.role,true,quickEntry(c),dotBinding(c,j,digest(current)));dotWriters(stage.value.record,impl.record.session.session_ref,digest(current));const passed=independentDecision(stage.value.record,c);if(stage.value.record.role==='review'){reviewed=passed&&stage.value.record.scope_pass===true;need(stage.value.passed===reviewed,'SUPERVISED_REVIEW_DECISION_MISMATCH');}}if(['xdev-supervised-qa-run-1','xdev-supervised-qa-claim-1'].includes(stage.value.format))proof(stage.value.session,stage.value.prototype?'implementation':'qa',stage.value.prototype===true,quickEntry(c),dotBinding(c,j,digest(current)));if(stage.value.format==='xdev-supervised-qa-run-1'){const claim=claimForRun(store,j,stage);if(!stage.value.prototype)checkedQaRun(store,j,c,stage,claim);}}
+    need(j.runs.length===1,'IMPLEMENTATION_MISSING');const impl=evidence(store,j.runs[0]!.evidence_refs[0]!);readRef(impl.source);readRef(impl.record.job_release);
+    if(isExternalImplementation(impl.record.session))provenance=externalImplementationProvenance;
+    const implementationInfo=implementationProof(s,c,j,impl.record.session,current),external=implementationInfo.kind==='EXTERNAL_ARTIFACT';
+    dotWriters(impl.record,impl.record.session.session_ref,digest(current));checkManifest(impl,current);
+    for(const stage of stages(store,j)){
+      readRef(stage.value.source);checkManifest(stage.value,current);
+      if(stage.value.record?.session){
+        sourceCompatible(impl.record.session,stage.value.record.session);proof(stage.value.record.session,stage.value.record.role,true,allowsCombinedChecker(c),dotBinding(c,j,digest(current)));
+        dotWriters(stage.value.record,impl.record.session.session_ref,digest(current));
+        if(external)need(!implementationInfo.authors.includes(stage.value.record.session.session_ref),'SUPERVISED_INDEPENDENCE_REQUIRED');
+        const passed=independentDecision(stage.value.record,c,external);
+        if(stage.value.record.role==='review'){reviewed=passed&&stage.value.record.scope_pass===true;need(stage.value.passed===reviewed,'SUPERVISED_REVIEW_DECISION_MISMATCH');}
+      }
+      if(['xdev-supervised-qa-run-1','xdev-supervised-qa-claim-1'].includes(stage.value.format)){
+        proof(stage.value.session,stage.value.prototype?'implementation':'qa',stage.value.prototype===true,allowsCombinedChecker(c),dotBinding(c,j,digest(current)));
+        if(external){sourceCompatible(impl.record.session,stage.value.session);const savedReview=latest(store,j,'xdev-supervised-review-1');need(savedReview,'SUPERVISED_REVIEW_PASS_REQUIRED');
+          checkerSeparation(c,id,implementationInfo.authors,savedReview.value.record.session,stage.value.session,false,digest(current));}
+      }
+      if(stage.value.format==='xdev-supervised-qa-run-1'){const claim=claimForRun(store,j,stage);if(!stage.value.prototype)checkedQaRun(store,j,c,stage,claim);}
+    }
     const review=latest(store,j,'xdev-supervised-review-1'),qa=latest(store,j,'xdev-supervised-qa-run-1'),final=latest(store,j,'xdev-supervised-qa-final-1');
     progress={...progress,binding:'CHECKED',implementation_recorded:true,review_recorded:!!review,review_passed:reviewed,qa_claimed:!!latest(store,j,'xdev-supervised-qa-claim-1'),qa_run:qa?(qa.value.passed?'PASSED':'FAILED'):'NOT_RUN',qa_final_recorded:!!final};
-    if(review&&['xdev-supervised-request-3','xdev-supervised-request-4'].includes(c.request.format))need(reviewed===true,'SUPERVISED_REVIEW_PREPARATION_REFUSED');
+    if(review&&['xdev-supervised-request-3','xdev-supervised-request-4','xdev-supervised-request-5'].includes(c.request.format))need(reviewed===true,'SUPERVISED_REVIEW_PREPARATION_REFUSED');
     if(prototype){selfCheckState=qa?(qa.value.passed?'PASSED':'FAILED'):'NOT_RUN';}else{need(review?.value.passed===true,'REVIEW_MISSING_OR_FAILED');need(qa?.value.passed===true,'QA_MISSING_OR_FAILED');need(final?.value.passed===true&&j.state==='VERIFIED','QA_NATURAL_FINAL_MISSING_OR_FAILED');
-     checkerSeparation(c,id,impl.record.session.session_ref,review.value.record.session,final.value.record.session,true,version);
+      checkerSeparation(c,id,implementationInfo.authors,review.value.record.session,final.value.record.session,true,version);
      need(final.value.record.qa_receipt?.id===qa.ref.id&&final.value.record.qa_receipt.sha256===qa.ref.sha256&&final.value.record.session.session_ref===qa.value.session.session_ref,'SUPERVISED_QA_RECEIPT_MISMATCH');
-     if(quickEntry(c)||final.value.record.session.format==='xdev-supervised-public-session-2')need(canonical({...final.value.record.session,natural_final:null,natural_end:false,...(final.value.record.session.format==='xdev-supervised-public-session-2'?{completion_observation:null}:{})})===canonical(qa.value.session),'SUPERVISED_QA_SESSION_MISMATCH');}
+     if(c.request.format==='xdev-supervised-request-5'||allowsCombinedChecker(c)||final.value.record.session.format==='xdev-supervised-public-session-2')need(canonical({...final.value.record.session,natural_final:null,natural_end:false,...(final.value.record.session.format==='xdev-supervised-public-session-2'?{completion_observation:null}:{})})===canonical(qa.value.session),'SUPERVISED_QA_SESSION_MISMATCH');}
   }catch(error){const reason=error instanceof Error?error.message:String(error);reasons.push(reason);if(!['IMPLEMENTATION_MISSING','REVIEW_MISSING_OR_FAILED','QA_MISSING_OR_FAILED','QA_NATURAL_FINAL_MISSING_OR_FAILED','SUPERVISED_REVIEW_PREPARATION_REFUSED'].includes(reason))progress={...progress,binding:'UNKNOWN',binding_error:reason};}
   const green=!prototype&&reasons.length===0;let executionAllowed=reasons.length===0&&!latest(store,j,'xdev-supervised-qa-claim-1')&&!['VERIFIED','PARTIALLY_VERIFIED','FAILED','CANCELLED'].includes(j.state);try{assertSupervisedWindow(entry);}catch{executionAllowed=false;}
   progress.delivery_verified=green;
-  return {progress,primary_next_step:primaryNextStep({progress,reasons}),mode:'supervised',job_id:id,revision:j.revision,persisted_state:j.state,entry,preparation_verified:entry?.preparation?.preparation_verified===true,execution_allowed:executionAllowed,self_check_state:prototype?selfCheckState:null,status:prototype?'PROTOTYPE_UNVERIFIED':green?'SUPERVISED_CODE_QUALITY_VERIFIED':(reasons.some(r=>/DRIFT|STALE|SCOPE/.test(r))?'STALE':'SUPERVISED_QUALITY_NOT_VERIFIED'),delivery_allowed:green,manifest_sha256:version,reasons,strict_d1_pass:false,native_identity_authenticated:false,provenance:'COORDINATOR_TRANSFERRED_PUBLIC_TOOLS',global_descendant_closure:'NOT_CLAIMED',result_refs:j.result_refs};
+  return {progress,primary_next_step:primaryNextStep({progress,reasons}),mode:'supervised',job_id:id,revision:j.revision,persisted_state:j.state,entry,preparation_verified:entry?.preparation?.preparation_verified===true,execution_allowed:executionAllowed,self_check_state:prototype?selfCheckState:null,status:prototype?'PROTOTYPE_UNVERIFIED':green?'SUPERVISED_CODE_QUALITY_VERIFIED':(reasons.some(r=>/DRIFT|STALE|SCOPE/.test(r))?'STALE':'SUPERVISED_QUALITY_NOT_VERIFIED'),delivery_allowed:green,manifest_sha256:version,reasons,strict_d1_pass:false,native_identity_authenticated:false,provenance,global_descendant_closure:'NOT_CLAIMED',result_refs:j.result_refs};
 }
 function currentProgressResult<T extends object>(s:Subject,id:JobId,value:T){const observed=querySupervised({...s,boundaryHealth:()=>null},id);return {...value,progress:observed.progress,primary_next_step:observed.primary_next_step};}
 export function prepareSupervised(s: Pick<Subject,'projectRoot'|'projectId'|'boundaryHealth'>, source: string,boundary?:FileRef|null) {
-  try { const bytes=file(source),prepared=inspectSupervisedPreparation(s,{path:source,sha256:sha(bytes)},readRef);if(boundary){need(prepared.confirmed_spec!==null,'SUPERVISED_PREPARATION_BOUNDARY_NOT_APPROVED');const confirmedSpec=parseD1UniqueJson(readRef(prepared.confirmed_spec)) as any;need(confirmedSpec!==null&&confirmedSpec!==undefined&&confirmedSpec.memory_boundary!==undefined,'SUPERVISED_PREPARATION_BOUNDARY_NOT_APPROVED');need(canonical(confirmedSpec.memory_boundary)===canonical(boundary),'SUPERVISED_PREPARATION_BOUNDARY_NOT_APPROVED');validateBoundary(boundary,s);inspectRequestHealth(s,{memory_boundary:boundary});}return {...prepared,memory_boundary_checked:boundary!==undefined&&boundary!==null}; }
+  try { const bytes=file(source),prepared=inspectSupervisedPreparation(s,{path:source,sha256:sha(bytes)},readRef);const policy=prepared.confirmed_spec?externalPolicy(parseD1UniqueJson(readRef(prepared.confirmed_spec)),null,readRef):null;
+    if(boundary){need(prepared.confirmed_spec!==null,'SUPERVISED_PREPARATION_BOUNDARY_NOT_APPROVED');const confirmedSpec=parseD1UniqueJson(readRef(prepared.confirmed_spec)) as any;need(confirmedSpec!==null&&confirmedSpec!==undefined&&confirmedSpec.memory_boundary!==undefined,'SUPERVISED_PREPARATION_BOUNDARY_NOT_APPROVED');need(canonical(confirmedSpec.memory_boundary)===canonical(boundary),'SUPERVISED_PREPARATION_BOUNDARY_NOT_APPROVED');validateBoundary(boundary,s);inspectRequestHealth(s,{memory_boundary:boundary});}
+    return {...prepared,memory_boundary_checked:boundary!==undefined&&boundary!==null,...(policy?{external_implementation_policy:{shape_checked:true,job_source_eligibility:'NOT_EVALUATED'}}:{})}; }
   catch(error){return {format:'xdev-supervised-preparation-result-1',status:'UNSUPPORTED' as const,
     reason:error instanceof Error?error.message:String(error),questions:['Repair the named preparation version, project binding or source reference from the original public discussion; then explicitly reassess readiness.'],
     project_id:s.projectId,project_root:s.projectRoot,preparation_verified:false,native_identity_authenticated:false,xmi:supervisedPreparationGuidance};}

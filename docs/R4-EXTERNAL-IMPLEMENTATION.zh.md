@@ -1,0 +1,49 @@
+# Host 原样采用外部实现
+
+本入口用于已明确绑定的request-5正式Node任务。Host可把实际外部Coding Agent已完成的代码原样转入候选，直接登记实施来源，省去只为来源格式增加的Codex复制角色。Host仍负责准确材料、声明和转录，不能代写解法或代签Review/QA。Owner给意图，Host生成机器字段，不要求Owner填写JSON。
+
+来源类型为`xdev-external-implementation-source-1`，source_claim固定为`COORDINATOR_RECORDED_EXTERNAL_ARTIFACT`、native_authenticated固定false。它表示协调者记录的外部产物及采用关系；Core可核引用、绑定和字节，不能认证外部身份、实际模型、完成声明或全部隐藏上下文。公开来源是否足以证明本次完成与作者集合，由非作者Reviewer本人核实。
+
+## 编码前
+
+先冻结完整QA项目基线和独立作者视图，保护原业务及不应披露的历史数据。完整QA项目可以大于作者视图；作者初始每个文件都须与同路径项目基线hash一致。作者提示、允许改动和两臂输入另按实际合同固定。
+
+冻结spec增加implementation_source_policy，闭集为format=`xdev-implementation-source-policy-1`、allow_external_artifact_adoption=true、author_input_manifest:FileRef。后者指初始作者视图的完整Member数组，每项仅path/sha256；不能在编码后用最终清单回填。缺省仍走原native路径，非法policy在start占用/Job前拒绝。prepare仅做policy形状/引用检查并标明Job来源资格NOT_EVALUATED；实际start才核当前request及初始子集。
+
+沿原prepare/preflight/start，在真正编码前绑定该spec、范围、AC、独立检查和有限许可。无隐式项目或新增执行权限。普通编辑不逐文件新建Job；变化、中断及UNKNOWN按原规则处理。
+
+## 产物与采用
+
+### MCP 输入域与原始证据
+
+MCP与显式CLI共用Core，但MCP额外保留本地能力域：author_input_manifest、artifact_manifest及public_evidence的FileRef都须在已批准input_root内，artifact_root也须在该根下且无链接。Host在实际授权的准备域中原字节保存/复制材料；MCP stage_inputs=false时不能据此调用暂存或扩大读域。CLI可用的根外来源不自动成为MCP可读来源；旧CLI结果不迁移、不追认。
+
+输入图仅在这两个已知外部协议的准确位置，将初始/最终Member清单作为相对路径数据，复用Core的成员约束；仅adoption.public_evidence按原字节读入，不把JSONL/公开正文解释成另一张引用图。根、hash、大小、单链接、512引用及64层深度限制保持。不同读取语义独立计seen key，同一文件先作为公开正文出现不会豁免之后的普通FileRef核对。普通相对FileRef、越界或未知字段仍拒绝；Core继续核真实源清单与完整候选delta。
+
+只接收已完成、全部相关已知写者结束且没有未决写入的产物。timeout/中断、缺原完成观察、活动或未知写者不准入；先原身份只读对账，不追加一个声明来追认完成。
+
+保留完整最终作者快照、初始清单、公开原始完成观察/输出和准确Host版本/可见模型标签；不可得标签用UNKNOWN，不推导认证或成本。源快照与项目/控制域分离；沿现有普通规范绝对路径、无链接、单链接文件、每文件及4096成员限制。不扩展8.3/SUBST/其他namespace能力。
+
+adoption引用的初始清单必须与spec policy中同一FileRef完全相等。Core要求：初始作者视图→最终源快照的全部新增/修改、逐文件transfers、项目baseline→当前候选的全部新增/修改，三者路径集合及hash一致。源文件删除、改了但不转入、遗漏新增、越界或目标另写内容都拒绝；新增/替换仅支持相同相对路径，删除/重命名本增量不支持。不能只复制“看起来有用”的改动后冒称原样采用。
+
+record-1仍使用role=implementation、当前job_id、manifest_sha256及job_release；session判别为新来源，严格仅format/role/session_ref/source_claim/native_authenticated/adoption。这里session_ref是声明的Host操作者引用，不是native会话认证。job_release的task_name与该Host引用相同，message说明当前采用许可；不伪造worker派发或自然final。
+
+adoption闭集见实现：format/job_id/task_id/spec_sha256/baseline_manifest_sha256/candidate_manifest_sha256、known_author_refs/adopting_host_ref/source_host、completion_state/all_known_writers_ended/unknown_relevant_writers、public_evidence、artifact_root/author_input_manifest/artifact_manifest/transfers。format为`xdev-external-artifact-adoption-1`；public_evidence为1至8个真实FileRef；source_host仅name/version/model_label。known_author_refs为2至16个唯一引用，包含Host和本轮实现/纠正链的全部已知语义作者，包括补位；未知相关写者不适用本入口。
+
+## 质量与恢复
+
+所有已知作者及采用者均不得担任Review或QA。新实施来源只与真实public-session-1质量角色组合；external不能充任质量角色，不能与dot/public-session-2混搭。原native v1/v2路径及其兼容规则不变；旧request、prototype本增量不支持外部采用。
+
+Reviewer在现有scope_pass/preparation_conformance/review_burden_justified及AC意见外，提供严格boolean implementation_source_conformance，record与本人natural final须一致。本人核实实际公开输入/输出、完成观察、源/候选映射及作者全集；缺项/false不能由绿色测试抵消，也不能由Host填写true。shape检查和hash自洽本身不证明外部行为真实。
+
+本人natural final使用简短完整结论，建议不超过4000字符，并以FileRef引用完整报告。原Core公开final字符串要求非空且少于8192字符，MCP原record容量限制也保持；协调者不得截断、改写或代签长原件来适配。长报告和原始输出完整保留，QA的短final仍须由本人自然作出，带同Job/候选、真实checks/qa_pass及准确原runner receipt。
+
+通过Review后仍由实际独立QA执行原冻结命令，绑定原runner receipt、同候选和本人final，最后查询run-status/run-result。来源登记不授予交付、执行或发布权限。worker_run.adapter_id显示external-artifact，查询来源标签保持协调者声明。
+
+源/公开证据/候选漂移保守失效；登记重复、提交前复验、QA/final、原final恢复和查询沿原事务、head/CAS、一次claim与只读重放，不退款、不重跑、不另建影子账本。必须保留源快照及公开引用，不能清理后仍声称可核。
+
+## 已支持与未证明
+
+此处定义的是实施来源入口，未增加Host/CI QA回执导入、自动角色派发、通用日志解析或外部发布硬门禁。每种实际宿主及完整真实链分别验收；TEST_ONLY协议用例不证明WorkBuddy或其他Agent真实质量通过。
+
+对照试验分开披露Coding Agent上下文、XDev三个门禁、共同评测管理员和独立质量角色的实际规则/记忆。移除额外Codex角色不等于整个会话完全无XSuite，也不直接证明降成本；治理G/F、合格交付Q和全部角色成本C继续独立取证。旧失败、中断与未完成不因本入口改写。

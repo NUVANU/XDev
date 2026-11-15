@@ -1,3 +1,4 @@
+import { allowsCombinedChecker } from '../src/host-surface/supervised-requirements.ts';
 import { selectMemoryBoundary, boundaryHealth } from '../src/host-surface/project-memory-boundary.ts';
 import { projectPrimaryNextStep } from '../src/host-surface/primary-next-step.ts';
 import { runXspecAction } from '../src/host-surface/xspec-intake.ts';
@@ -9,14 +10,12 @@ import { join } from 'node:path';
 import { JobStore, canonical, productionJobRoot } from '../src/job-runtime/store.ts';
 import { parseD1UniqueJson } from '../src/job-runtime/contracts.ts';
 import type { JobId } from '../src/job-runtime/contracts.ts';
-import { prepareSupervised, startSupervised, recordSupervised, qaSupervised, querySupervised, supervisedManifest, inspectSupervisedInput, inspectSupervisedRecovery, recoverSupervisedQa } from '../src/host-surface/supervised-quality.ts';
+import { prepareSupervised, startSupervised, recordSupervised, qaSupervised, querySupervised, supervisedManifest, inspectSupervisedInput, inspectSupervisedRequest, inspectSupervisedRecovery, recoverSupervisedQa } from '../src/host-surface/supervised-quality.ts';
 import { inspectPreflight, bindingFields } from './preflight.ts';
 import { capacity } from './capacity.ts';
 import type { PreflightOptions } from './preflight.ts';
 import { bytes, exact, hash, loadConfig, need, noLinks } from './configure.ts';
 import type { FileRef } from './configure.ts';
-import { inspectSupervisedProfile } from '../src/host-surface/supervised-profile.ts';
-import { requireSupervisedPreparation } from '../src/host-surface/supervised-preparation.ts';
 import { bridgeMemory } from './memory-bridge.ts';
 import { RELEASE } from './release.ts';
 import { createInputReader } from './input-reader.ts';
@@ -47,14 +46,16 @@ function createBoundAdapter(local:ReturnType<typeof loadConfig>) {
   const server=new McpServer({name:'xdev-local',version:RELEASE.adapter_version},{maxToolInputElements:4096});
   const checkConfig=()=>{need(hash(bytes(local.configPath))===local.configHash,'MCP_LOCAL_CONFIG_DRIFT_RESTART_REQUIRED');for(const root of [c.project_root,c.control_root,c.input_root])noLinks(root);};
   const {read,readEvidence,graph,source}=createInputReader(c);
-  const approved=(ref:FileRef)=>{need((c.approved_requests??[]).some(a=>canonical(a)===canonical(ref)),'MCP_REQUEST_NOT_LOCALLY_APPROVED');const r=source(ref);need(['xdev-supervised-request-3','xdev-supervised-request-4'].includes(r.format),'MCP_V3_OR_V4_REQUEST_REQUIRED');return r;};
+  const approved=(ref:FileRef)=>{need((c.approved_requests??[]).some(a=>canonical(a)===canonical(ref)),'MCP_REQUEST_NOT_LOCALLY_APPROVED');const r=source(ref);need(['xdev-supervised-request-3','xdev-supervised-request-4','xdev-supervised-request-5'].includes(r.format),'MCP_V3_OR_V4_REQUEST_REQUIRED');return r;};
   const timeout=(r:any)=>{need(Array.isArray(r.commands)&&r.commands.every((v:any)=>Number.isSafeInteger(v.timeout_ms)&&v.timeout_ms>0)&&r.commands.reduce((n:number,v:any)=>n+v.timeout_ms,0)<=MAX_SYNC_QA_MS,'MCP_SYNC_QA_WINDOW_UNSUPPORTED');};
   const boundJob=(id:string)=>{
     const store=new JobStore(storeRoot,{project_id:c.project_id,workspace_root:c.project_root});
     const job=store.getJob(id as JobId);need(!job.d1_intake&&job.tasks.length===1,'MCP_SUPERVISED_JOB_REQUIRED');
     const contract=readEvidence(job.tasks[0]!.contract_ref) as any;need(contract.format==='xdev-supervised-contract-1','MCP_SUPERVISED_JOB_REQUIRED');
     const request=approved(contract.source);need(canonical(request)===canonical(contract.request),'MCP_JOB_REQUEST_MISMATCH');
-    graph(contract,true);graph(job,true);inspectSupervisedInput(s,'request',contract.source.path);return {request,job,contract};
+    graph(contract,true);graph(job,true);
+    const {entry}=inspectSupervisedRequest(s,contract.source.path,'reopen');
+    return {request,job,contract,entry};
   };
   // Historical byte/graph binding, deliberately independent of old request
   // approvals and execution permissions. It grants no new write or execution.
@@ -65,11 +66,9 @@ function createBoundAdapter(local:ReturnType<typeof loadConfig>) {
     read(contract.source);graph(contract,true);graph(job,true);return{job,contract};
   };
   const mutationRoots=()=>{capacity(c.project_id,512,'PROJECT_ID');for(const path of [c.project_root,c.control_root,c.input_root,storeRoot,process.execPath])capacity(path,CAPACITY.path_json_bytes,'PATH');};
-  const requestCapacity=(r:any)=>{
+  const requestCapacity=(r:any,entry:any)=>{
     mutationRoots();capacity(r,CAPACITY.request_json_bytes,'REQUEST');
-    const preparation=requireSupervisedPreparation(s,r.preparation,read,r.spec);
-    const entry={...inspectSupervisedProfile(r,source(r.spec),read,c.project_id),preparation};
-    capacity(entry,CAPACITY.entry_json_bytes,'ENTRY');return entry;
+    capacity(entry,CAPACITY.entry_json_bytes,'ENTRY');
   };
   const manifestCapacity=()=>{const manifest=supervisedManifest(c.project_root,selectMemoryBoundary(c)?.ref);capacity(manifest,CAPACITY.manifest_json_bytes,'MANIFEST');return manifest;};
   const qaCapacity=(r:any)=>{
@@ -79,8 +78,8 @@ function createBoundAdapter(local:ReturnType<typeof loadConfig>) {
     // The computed bound currently admits one complete frozen command. Never
     // remove commands to fit; a larger task remains available via original CLI.
   };
-  const startCapacity=(ref:FileRef,r:any)=>{
-    capacity(ref.path,CAPACITY.source_path_json_bytes,'SOURCE_PATH');const entry=requestCapacity(r),baseline=manifestCapacity();qaCapacity(r);
+  const startCapacity=(ref:FileRef,r:any,entry:any)=>{
+    capacity(ref.path,CAPACITY.source_path_json_bytes,'SOURCE_PATH');requestCapacity(r,entry);const baseline=manifestCapacity();qaCapacity(r);
     const claim={path:join(c.control_root,'supervised-start-consumed',hash(canonical(entry.authorization.source))+'.json'),sha256:'0'.repeat(64)};
     capacity({format:'xdev-supervised-contract-1',source:ref,request:r,baseline,baseline_sha256:'0'.repeat(64),entry,start_claim:claim},CAPACITY.evidence_bytes,'CONTRACT');
     // With roots and project_id <=512 encoded bytes, the fixed
@@ -90,7 +89,7 @@ function createBoundAdapter(local:ReturnType<typeof loadConfig>) {
   };
   const laterCapacity=(binding:ReturnType<typeof boundJob>,input:any,ref:FileRef)=>{
     capacity(ref.path,CAPACITY.source_path_json_bytes,'SOURCE_PATH');
-    requestCapacity(binding.request);const manifest=manifestCapacity();capacity(binding.job,CAPACITY.job_json_bytes,'JOB');capacity(input,CAPACITY.record_json_bytes,'RECORD');
+    requestCapacity(binding.request,binding.entry);const manifest=manifestCapacity();capacity(binding.job,CAPACITY.job_json_bytes,'JOB');capacity(input,CAPACITY.record_json_bytes,'RECORD');
     // Every record/claim/final consists of this bounded input, at most one
     // manifest, and fixed refs/metadata; reserve 64KiB rather than assume raw
     // file size equals JSON encoding. QA output is bounded separately above.
@@ -104,13 +103,13 @@ function createBoundAdapter(local:ReturnType<typeof loadConfig>) {
     const requirements:boolean[]=[],noteProfile=(prototype:boolean)=>{requirements.push(!prototype);capabilities.finalWriterRequired=requirements.some(Boolean);};
     return inspectPreflight(local,options,(kind,ref)=>{
       const value=source(ref); // Existing strict file/hash/root/graph boundary.
-      if(kind==='request'){const inspected=inspectSupervisedInput(s,kind,ref.path);approved(ref);timeout(value);startCapacity(ref,value);noteProfile(inspected.entry?.decision.selected_profile==='prototype');return inspected;}
+      if(kind==='request'){approved(ref);timeout(value);const inspected=inspectSupervisedRequest(s,ref.path);startCapacity(ref,value,inspected.entry);noteProfile(inspected.entry?.decision?.selected_profile==='prototype');return inspected;}
       else {
         // Read the real Job/contract for required v3 fields, never consume it.
         const binding=boundJob(value.job_id);
-        const inspected=inspectSupervisedInput(s,kind,ref.path,binding.request.format,binding.contract.entry?.decision.selected_profile==='quick_verified',binding.request.memory_boundary);
+        const inspected=inspectSupervisedInput(s,kind,ref.path,binding.request.format,allowsCombinedChecker(binding.contract),binding.request.memory_boundary);
         laterCapacity(binding,value,ref);
-        noteProfile(binding.contract.entry?.decision.selected_profile==='prototype');
+        noteProfile(binding.contract.entry?.decision?.selected_profile==='prototype');
         return inspected;
       }
     },capabilities);
@@ -156,10 +155,12 @@ function createBoundAdapter(local:ReturnType<typeof loadConfig>) {
     register('xdev_task_basis','Compute a complete bounded derived task packet from an approved received package. Does not save, send or adopt it.',object({source:fileRef}),true,a=>{checkConfig();source(a.source);return runTaskBasisAction(local,a.source,read);});
   }
   register('xdev_prepare','Inspect existing public preparation; no Job or start claim. Declarations and byte binding are not semantic/identity proof.',object({source:fileRef}),true,a=>{source(a.source);return prepareSupervised(s,a.source.path,selectMemoryBoundary(c)?.ref);});
-  register('xdev_start','Create one bounded Job using an exact locally preapproved v3 request. Does not dispatch a role.',object({source:fileRef}),false,(a,enterMutation)=>{permit('write_jobs');const r=approved(a.source);timeout(r);const prep=prepareSupervised(s,r.preparation.path,r.memory_boundary);need(prep.status==='READY','MCP_PREPARATION_NOT_READY');startCapacity(a.source,r);inspectSupervisedInput(s,'request',a.source.path);enterMutation();return projectPrimaryNextStep(startSupervised(s,a.source.path),primaryPermissions());});
+  register('xdev_start','Create one bounded Job using an exact locally preapproved v3 request. Does not dispatch a role.',object({source:fileRef}),false,(a,enterMutation)=>{permit('write_jobs');const r=approved(a.source);timeout(r);const prep=prepareSupervised(s,r.preparation.path,r.memory_boundary);need(prep.status==='READY','MCP_PREPARATION_NOT_READY');const {entry}=inspectSupervisedRequest(s,a.source.path);startCapacity(a.source,r,entry);enterMutation();return projectPrimaryNextStep(startSupervised(s,a.source.path),primaryPermissions());});
   register('xdev_record','Record publicly attributed natural role result for this approved Job/version. Does not authenticate native roles.',object({job_id:jobId,source:fileRef}),false,(a,enterMutation)=>{
     permit('write_jobs');const binding=boundJob(a.job_id);const r=source(a.source);const role=r.role;need(['implementation','review','qa'].includes(role),'MCP_RECORD_ROLE_INVALID');
-    exact(r,['format','job_id','role','session','manifest_sha256',...(r.session?.format==='xdev-supervised-public-session-2'?['writer_status']:[]),...(role==='implementation'?['job_release']:['decision','checks']),...(role==='review'?['scope_pass','preparation_conformance','review_burden_justified']:role==='qa'?['qa_pass','qa_receipt']:[])]);
+    const sourceFields=role==='review'&&Object.hasOwn(r,'implementation_source_conformance')?['implementation_source_conformance']:[];
+    exact(r,['format','job_id','role','session','manifest_sha256',...(r.session?.format==='xdev-supervised-public-session-2'?['writer_status']:[]),...(role==='implementation'?['job_release']:['decision','checks']),...(role==='review'?['scope_pass','preparation_conformance','review_burden_justified',...sourceFields]:role==='qa'?['qa_pass','qa_receipt']:[])]);
+    if(sourceFields.length)need(typeof r.implementation_source_conformance==='boolean','SUPERVISED_BOOLEAN_REQUIRED:implementation_source_conformance');
     laterCapacity(binding,r,a.source);enterMutation();return projectPrimaryNextStep(recordSupervised(s,a.job_id,a.source.path),primaryPermissions());
   });
   for(const selfCheck of [false,true])register(selfCheck?'xdev_self_check':'xdev_qa',selfCheck?'Run frozen prototype self-check; never grants verified delivery.':'Execute frozen bounded Node QA after independent Review. Claims persist on failure/disconnect; no arbitrary shell.',object({job_id:jobId,source:fileRef}),false,(a,enterMutation)=>{
