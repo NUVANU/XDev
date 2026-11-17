@@ -3,6 +3,16 @@ name: xdev
 description: Route approved project work by operation type and risk, inspect XDev local binding, and enter supervised product development when needed.
 ---
 
+## MECH-03 有界持续推进
+
+按[有界持续推进](../../docs/R4-BOUNDED-CONTINUATION.zh.md)检查每次实现、Review、QA、修复或当前Job结束后的总目标与剩余AC。当前范围/版本、具体授权、独立性、预算/期限和证据前置成立时，协调者直接接续下一步；阶段报告用进度消息，不等待用户再说“继续”。实现者和独立检查者仍正常提交各自自然final及原回执，由协调者接收后继续，不能省略Review、实际QA、验收或已获授权的安装。
+
+`automatic_execution:false`只描述XDev运行时不自行派发；`execution_allowed:false`是原当前Job查询标记；它们均不能单独判定整个Host工作流须等待用户。`primary_next_step`是只读建议，具体动作仍过原门禁；`COMPLETE`只完成当前Job，仍核总目标。解释元数据不授予权限，也不作用户输入决定。
+
+阻塞在现有交接记录原因、原证据、依赖范围、解除条件、尝试和消费。停止受影响路径，已有授权内明确处置后可继续确实独立的工作；权限不足、产品决定、付费/安全变化、缺证据或UNKNOWN不绕行。未知先原身份只读对账。同问题累计尝试，无新依据不重复；原更严格的有限纠正/截止优先，连续两轮未解重评不自增额度。不要为保持运行增加无关功能或验证工具。
+
+本节是Host协调规则及只读输出解释。Stop Hook仍是非强制提醒，不调度、不承诺跨idle或会话恢复；自动续轮、共享预算和后台执行仍不支持。
+
 ## R4 工作分流（MECH-02）
 
 先按[操作类型与风险](../../docs/R4-OPERATION-ROUTING.zh.md)选择流程。已有能力支持、范围清楚、可回退的日常操作，直接做必要备份、执行和结果核验，不默认建产品卡/Job或派独立Review/产品QA；不为普通配置、文件或文档操作强制绑定MCP。高风险叠加具体检查和确实缺失的授权。改变产品行为/协议或新增产品能力时进入监督开发，保留非作者Review和实际QA。

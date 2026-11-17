@@ -2,7 +2,9 @@
 export type PrimaryPermissions={source:'CORE_CONTRACT_NO_ADDITIONAL_LOCAL_GATE'|'MCP_LOCAL_CONFIG'|'UNKNOWN';write_jobs:boolean|null;execute_qa:boolean|null};
 export type PrimaryProgress={binding:'CHECKED'|'UNKNOWN';binding_error?:string;persisted_state:string|null;profile:string|null;check_requirements?:unknown;authorization:'CURRENT'|'STOPPED_OR_EXPIRED'|'UNKNOWN';permissions:PrimaryPermissions;implementation_recorded:boolean|null;review_recorded:boolean|null;review_passed:boolean|null;qa_claimed:boolean|null;qa_run:'NOT_RUN'|'PASSED'|'FAILED'|'UNKNOWN';qa_final_recorded:boolean|null;delivery_verified:boolean|null};
 export function primaryNextStep(s:{progress?:PrimaryProgress;reasons?:string[]}){
- const result=(status:string,reason:string,action:unknown=null,missing:string[]=[])=>({status,reason,action,missing_observations:missing,automatic_execution:false});
+ // This projection neither dispatches nor grants permission. The Host checks
+ // action-specific authority and the overall goal after each stage/Job result.
+ const result=(status:string,reason:string,action:unknown=null,missing:string[]=[])=>({status,reason,action,missing_observations:missing,automatic_execution:false,interpretation:{coordination_owner:'HOST',automatic_execution_scope:'XDEV_RUNTIME_ONLY',completion_scope:'CURRENT_JOB',permission_granted:false}});
  const p=s.progress;
  if(!p)return result('UNKNOWN','CURRENT_PROGRESS_NOT_OBSERVED',null,['progress']);
  if(p.binding!=='CHECKED')return result(p.binding_error?.includes('UNSUPPORTED')?'UNSUPPORTED':'BLOCKED','CURRENT_MATERIAL_CHAIN_NOT_CHECKED',null,['progress.binding']);

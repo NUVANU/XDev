@@ -2,6 +2,10 @@
 
 # Supervised code quality
 
+## MECH-03 bounded continuation
+
+After each implementation, independent Review, actual QA, bounded correction or Job result, the Host coordinator checks the confirmed overall goal and remaining acceptance criteria. Continue a currently authorized, unblocked next step without requiring another user “continue”. Role agents still end with their own natural finals and original receipts. Preserve all action-specific permissions, claims, version, quality and finite-stop gates. See [bounded continuation](R4-BOUNDED-CONTINUATION.zh.md) for result interpretation, dependency-local blockers, cumulative attempts and Host lifecycle limits. The static primary_next_step.interpretation grants no authority; COMPLETE is scoped to the current Job. No automatic dispatch, idle wakeup or new recovery engine is added.
+
 ## Missing QA final recovery
 
 `task recovery-status` (optional `--source ORIGINAL_RECORD`) reads the original

@@ -4,7 +4,7 @@
 
 A lightweight engineering governance layer for AI-assisted development: keep the host's coding workflow, add scope checks, delivery evidence, and bounded recovery.
 
-**English** · [简体中文](README.zh-CN.md)
+**English** · [简体中文](https://github.com/NUVANU/XDev/blob/main/README.zh-CN.md)
 
 [Get started](https://github.com/NUVANU/X-Suite/blob/main/INSTALL.md) · [Community workflow](docs/COMMUNITY.md) · [X Suite](https://github.com/NUVANU/X-Suite)
 
@@ -25,9 +25,17 @@ Your agent says the feature is finished. But did it implement the agreed behavio
 
 Useful for maintained products, multi-session development, and agent handoffs where a convincing final message is insufficient evidence.
 
-## What's new in 0.1.3
+## What's new in 0.1.4
 
-This public source update follows the locally accepted **R4 core + MECH-02** line.
+This update adds bounded continuation within the existing host workflow and authorization.
+
+- **Continue after a stage finishes.** Check the overall goal and remaining acceptance criteria, then take an authorized, unblocked next step without asking for another generic “continue”. Each role still submits its own natural final and original receipts.
+- **Keep Job status in scope.** A completed Job is not completion of the whole goal. Runtime automation flags describe XDev itself; they neither revoke existing authority nor grant new authority to the host.
+- **Handle blockers with limits.** Preserve the original evidence, dependencies, attempts, and consumption. Reconcile UNKNOWN under the original identity; stop affected paths while handling genuinely independent, authorized work. Existing deadlines and stricter correction limits still apply.
+
+See [bounded continuation](docs/R4-BOUNDED-CONTINUATION.zh.md). The Stop hook is a reminder, not a scheduler or background wakeup service.
+
+### Retained governance capabilities
 
 - **One default contract for new formal Node tasks.** Request v5 has no three-tier profile selector. Legacy v1–v4 contracts and existing Jobs retain their original meaning.
 - **Shallow integration.** Let the host develop normally; inspect entry, changes/interruption, and delivery rather than approve every file edit.
@@ -55,7 +63,7 @@ If execution is interrupted, inspect the original Job and records first. Recover
 
 ## Quick start
 
-**Public source: 0.1.3 · MPL-2.0 · Windows/Codex is the validated local path.** Source provenance and packaging differences are listed in [this update note](docs/PUBLIC-UPDATE-20261115.md).
+**Public source: 0.1.4 · MPL-2.0 · Windows/Codex is the validated local path.** Source provenance and packaging differences are listed in [this update note](docs/PUBLIC-UPDATE-20261117.md).
 
 Use Node.js **24.20.0**, pnpm **11.25.0**, and npm **11.19.0** for the documented local path:
 
@@ -112,7 +120,7 @@ Hashes establish content consistency, not the truth of a conclusion or authentic
 
 ## Validation and limits
 
-The upstream R4 core has scoped local acceptance, including separate real feature/fix delivery evidence. MECH-02 has independent Review and six host-policy scenarios: **three executed fixture operations and three decision-only cases**. This is not six new core-runner QA cases or overall R4/cost acceptance.
+The new continuation changes passed independent source/method Review and **35/35 scoped projection/hook checks**, with a successful typecheck. Host-policy decisions, local installation, fresh loading, and real business continuation are separate evidence. Full Job/MCP integration retains unpassed cases: the candidate and prior source both produced **11/17** in the recorded environment. See the [validation scope and retained failures](docs/PUBLIC-UPDATE-20261117.md).
 
 The supported MCP QA runner retains its exact Node **24.19.0 / 24.20.0**, single frozen command, and **90-second maximum** boundary. Browser/UI, game engines, other hosts, unattended operation, clean-machine installation, and long-term savings require their own evidence. The source update does not establish a measured bug-reduction or token-saving percentage.
 
