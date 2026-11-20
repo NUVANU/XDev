@@ -9,7 +9,7 @@ import { d1WorkerMessage, d1WorkerMessageV2, parseD1UniqueJson,
 import { verifyD1ContextRefreshSource } from '../execution/d1-context-refresh.ts';
 import { assertD1LocalControl, hasD1LocalControlLock } from '../host-surface/d1-local-control.ts';
 import { readProfile, deriveD1IntakeInput, checkFirstSourceAge } from '../host-surface/d1-intake-source.ts';
-import { canonical, productionJobRoot } from './storage-identity.ts';
+import { assertProjectLocalDirectories, canonical, productionJobRoot, projectLocalLayout } from './storage-identity.ts';
 import { observeD1QualityUnavailable } from '../host-surface/d1-quality-observer.ts';
 import { check, createState, exact, inspectResumeState, jobId, reduce, terminalJob, UUID } from './state.ts';
 
@@ -46,14 +46,16 @@ export class JobStore {
   private readonly heldJobs=new Set<string>();
   private readonly localD1:boolean;
   private plannedIntake:{requestId:string;id:JobId;inputSha:string;at:string;command:CreateCommand}|null=null;
-  constructor(root:string,project:ProjectRef,options:{fault?:WriteFault}={}) {
+  constructor(root:string,project:ProjectRef,options:{fault?:WriteFault;projectLocalSupervised?:boolean}={}) {
     check(isAbsolute(root)&&resolve(root)===root,'JOB_STORAGE_PATH_INVALID');
     exact(project,['project_id','workspace_root']);check(typeof project.project_id==='string'&&project.project_id.length>0&&isAbsolute(project.workspace_root)&&resolve(project.workspace_root)===project.workspace_root,'JOB_PROJECT_INVALID');
     const localD1=root===productionJobRoot(join(project.workspace_root,'.xdev-d1-control'),project.project_id);
-    check(localD1||!inside(project.workspace_root,root)&&!inside(root,project.workspace_root),'JOB_STORAGE_WORKSPACE_OVERLAP');
+    const localSupervised=options.projectLocalSupervised===true&&root===productionJobRoot(projectLocalLayout(project.workspace_root).controlRoot,project.project_id);
+    check(localD1||localSupervised||!inside(project.workspace_root,root)&&!inside(root,project.workspace_root),'JOB_STORAGE_WORKSPACE_OVERLAP');
     if(localD1)assertD1LocalControl(project.workspace_root,dirname(root),project.project_id,
       {allowLock:hasD1LocalControlLock(dirname(root)),allowNoProfile:true});
     noLinks(root);
+    if(localSupervised)assertProjectLocalDirectories(project.workspace_root);
     check(existsSync(dirname(root))&&lstatSync(dirname(root)).isDirectory(),'JOB_STORAGE_PARENT_REQUIRED');
     if(existsSync(root))check(lstatSync(root).isDirectory(),'JOB_STORAGE_INVALID');
     this.root=root;this.project=structuredClone(project);this.fault=options.fault;this.localD1=localD1;

@@ -1,6 +1,6 @@
 # XDev 社区版工作流 / Community workflow
 
-0.1.3 follows R4 core and MECH-02. Start with the [suite installation guide](https://github.com/NUVANU/X-Suite/blob/main/INSTALL.md). English overview: [README](../README.md).
+0.1.5 adds an explicit project-local layout for supported supervised tasks. Start with the [suite installation guide](https://github.com/NUVANU/X-Suite/blob/main/INSTALL.md). English overview: [README](../README.md).
 
 ## 1. 先选择实际操作路径
 
@@ -13,6 +13,8 @@ See [operation routing](R4-OPERATION-ROUTING.zh.md) and [shallow integration](R4
 无配置启动 MCP 时，`xdev_context` 只返回 UNBOUND；不选择 cwd，不创建任务，也不授予写权限。真正开发前按 [LOCAL-MCP](LOCAL-MCP.zh.md) 显式设置实际项目、输入/控制目录及准确权限，重连后核对 context。
 
 For a supported XMi XSpec handoff, preserve its original files and manifest and use explicit source-to-target mapping under the spec-intake permission. A successful readback is not permission to execute the specification. XMi is optional for a clear ordinary task.
+
+普通受监督开发可显式选择项目直属 `.xdev/control`、`.xdev/input` 与 `.xdev/local-config.json`。只排除这三个运行数据路径，其他 `.xdev` 产品文件仍纳入候选。已有目录不覆盖、不自动搬迁；XSpec 接收、旧 XMem bridge 与外部实施产物采用仍使用外置布局。详见 [LOCAL-MCP](LOCAL-MCP.zh.md)。
 
 ## 3. 新正式开发使用 v5
 

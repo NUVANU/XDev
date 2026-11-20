@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync } from 'node:fs';
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseD1UniqueJson } from '../src/job-runtime/contracts.ts';
+import { assertProjectLocalDirectories, isProjectLocalControl, projectLocalLayout } from '../src/job-runtime/storage-identity.ts';
 import { E7_NATIVE_BUILD, ENGINEERING_CONTRACTS, RELATED_BUILDS, nativeJointQuery } from './sdk-builds.ts';
 import { selectMemoryBoundary, selectMemoryBoundaryWithDeployment } from '../src/host-surface/project-memory-boundary.ts';
 
@@ -27,6 +28,13 @@ export const hash=(b:string|Buffer)=>createHash('sha256').update(b).digest('hex'
 export function need(v:unknown, code:string):asserts v { if(!v)throw Error(code); }
 export function exact(v:any, keys:string[]) { need(v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join('|')===[...keys].sort().join('|'),'MCP_UNKNOWN_OR_MISSING_FIELDS'); }
 export function within(root:string,path:string) { const r=relative(root,path);return r===''||(!isAbsolute(r)&&r!=='..'&&!r.startsWith('..'+sep)); }
+export function withinConfiguredInput(c:LocalConfig,path:string) {
+  // A differently cased path can name a separate directory on Windows.
+  // Project-local FileRefs use the configured spelling of the input prefix.
+  return isProjectLocalControl(c.project_root,c.control_root)
+    ? path===c.input_root||path.startsWith(c.input_root+sep)
+    : within(c.input_root,path);
+}
 export function noLinks(path:string) {
   need(typeof path==='string'&&isAbsolute(path)&&resolve(path)===path,'MCP_CANONICAL_ABSOLUTE_PATH_REQUIRED');
   const parent=dirname(path);if(parent!==path)noLinks(parent);
@@ -94,11 +102,18 @@ function loadConfigData(path:string,includeDeployment:boolean) {
   exact(c,['format','project_id','project_root','control_root','input_root',...(c.permissions===undefined?[]:['permissions']),...(c.approved_requests===undefined?[]:['approved_requests']),...(c.memory_bridge===undefined?[]:['memory_bridge']),...(c.recovery===undefined?[]:['recovery']),...(c.spec_intake===undefined?[]:['spec_intake'])]);
   need(c.format==='xdev-local-mcp-1'&&typeof c.project_id==='string'&&c.project_id.trim().length>0&&c.project_id.length<256,'MCP_CONFIG_INVALID');
   const roots=[c.project_root,c.control_root,c.input_root];for(const root of roots){noLinks(root);need(lstatSync(root).isDirectory(),'MCP_ROOT_DIRECTORY_REQUIRED');}
-  need(roots.every((a,i)=>roots.every((d,j)=>i===j||!within(a,d))),'MCP_ROOTS_MUST_BE_DISJOINT');
+  const dir=projectLocalLayout(c.project_root);
+  const projectLocal=path===dir.configPath&&c.control_root===dir.controlRoot&&c.input_root===dir.inputRoot;
+  need(projectLocal||roots.every((a,i)=>roots.every((d,j)=>i===j||!within(a,d))),'MCP_ROOTS_MUST_BE_DISJOINT');
+  if(projectLocal){
+    assertProjectLocalDirectories(c.project_root);
+    need(basename(realpathSync.native(path))===basename(path),'MCP_PROJECT_LOCAL_CONFIG_NAME_MISMATCH');
+    need(c.memory_bridge===undefined&&c.spec_intake?.enabled!==true&&!c.permissions?.receive_specs,'MCP_PROJECT_LOCAL_INTEGRATION_UNSUPPORTED');
+  }
   if(c.permissions!==undefined){need(c.permissions&&typeof c.permissions==='object'&&!Array.isArray(c.permissions),'MCP_PERMISSIONS_INVALID');for(const [k,v] of Object.entries(c.permissions))need(['stage_inputs','write_jobs','execute_qa','receive_specs'].includes(k)&&typeof v==='boolean','MCP_PERMISSIONS_INVALID');}
   need(!c.permissions?.execute_qa||c.permissions.write_jobs===true,'MCP_QA_REQUIRES_JOB_WRITE');
   need(c.approved_requests===undefined||Array.isArray(c.approved_requests)&&c.approved_requests.length<=16,'MCP_APPROVALS_INVALID');
-  for(const ref of c.approved_requests??[]){refShape(ref);noLinks(ref.path);need(within(c.input_root,ref.path),'MCP_APPROVAL_OUTSIDE_INPUT_ROOT');}
+  for(const ref of c.approved_requests??[]){refShape(ref);noLinks(ref.path);need(withinConfiguredInput(c,ref.path),'MCP_APPROVAL_OUTSIDE_INPUT_ROOT');}
   need(!c.permissions?.write_jobs||(c.approved_requests?.length??0)>0,'MCP_LOCAL_APPROVED_REQUEST_REQUIRED');
   if(c.spec_intake!==undefined){const i=c.spec_intake;need(i&&typeof i.enabled==='boolean','XSPEC_CONFIG_INVALID');if(!i.enabled)exact(i,['enabled']);else{
     exact(i,['enabled','approved_sources','approved_mappings']);
@@ -109,7 +124,7 @@ function loadConfigData(path:string,includeDeployment:boolean) {
   memoryConfig(c,()=>includeDeployment?(selected=selectMemoryBoundaryWithDeployment(c)):selectMemoryBoundary(c));
   const recovery=c.recovery;if(recovery!==undefined){need(recovery&&typeof recovery==='object'&&typeof recovery.enabled==='boolean','MCP_RECOVERY_CONFIG_INVALID');
     if(!recovery.enabled)exact(recovery,['enabled']);else{exact(recovery,['enabled','format','approved_permits']);need(recovery.format==='xdev-local-recovery-1'&&Array.isArray(recovery.approved_permits)&&recovery.approved_permits.length<=16,'MCP_RECOVERY_CONFIG_INVALID');
-      for(const ref of recovery.approved_permits){refShape(ref);noLinks(ref.path);need(within(c.input_root,ref.path),'MCP_RECOVERY_PERMIT_OUTSIDE_INPUT');}need(new Set(recovery.approved_permits.map(ref=>ref.path)).size===recovery.approved_permits.length,'MCP_RECOVERY_DUPLICATE_PERMIT');}}
+      for(const ref of recovery.approved_permits){refShape(ref);noLinks(ref.path);need(withinConfiguredInput(c,ref.path),'MCP_RECOVERY_PERMIT_OUTSIDE_INPUT');}need(new Set(recovery.approved_permits.map(ref=>ref.path)).size===recovery.approved_permits.length,'MCP_RECOVERY_DUPLICATE_PERMIT');}}
   return {local:{config:structuredClone(c),configPath:path,configHash:hash(data)},selected};
 }
 export function loadConfig(path:string) {

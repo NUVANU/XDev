@@ -25,9 +25,19 @@ Your agent says the feature is finished. But did it implement the agreed behavio
 
 Useful for maintained products, multi-session development, and agent handoffs where a convincing final message is insufficient evidence.
 
-## What's new in 0.1.4
+## What's new in 0.1.5
 
-This update adds bounded continuation within the existing host workflow and authorization.
+This update adds an explicit project-local data layout for ordinary supervised work.
+
+- **Keep supported task data with the project.** Choose the direct `.xdev` child for `control/`, `input/`, and `local-config.json`; installation remains UNBOUND until explicitly configured. Existing directories are not overwritten or migrated.
+- **Exclude only the reserved runtime paths.** Candidate membership omits those three data paths in this layout. Other files inside `.xdev` still count as project files. Input containment, physical-directory identity, links, aliases, and other overlap checks remain enforced.
+- **Keep advanced workflows on external layout.** XSpec intake, the legacy XMem bridge, and external implementation-artifact adoption still use an external data root. Native XMem remains a separate connection.
+
+See the [project-local setup and restrictions](docs/LOCAL-MCP.zh.md) before choosing a layout.
+
+### Bounded continuation remains available
+
+The existing continuation policy reuses the host workflow and its current authorization.
 
 - **Continue after a stage finishes.** Check the overall goal and remaining acceptance criteria, then take an authorized, unblocked next step without asking for another generic “continue”. Each role still submits its own natural final and original receipts.
 - **Keep Job status in scope.** A completed Job is not completion of the whole goal. Runtime automation flags describe XDev itself; they neither revoke existing authority nor grant new authority to the host.
@@ -63,7 +73,7 @@ If execution is interrupted, inspect the original Job and records first. Recover
 
 ## Quick start
 
-**Public source: 0.1.4 · MPL-2.0 · Windows/Codex is the validated local path.** Source provenance and packaging differences are listed in [this update note](docs/PUBLIC-UPDATE-20261117.md).
+**Public source: 0.1.5 · MPL-2.0 · Windows/Codex is the validated local path.** Source provenance and packaging differences are listed in [this update note](docs/PUBLIC-UPDATE-20261120.md).
 
 Use Node.js **24.20.0**, pnpm **11.25.0**, and npm **11.19.0** for the documented local path:
 
@@ -120,7 +130,7 @@ Hashes establish content consistency, not the truth of a conclusion or authentic
 
 ## Validation and limits
 
-The new continuation changes passed independent source/method Review and **35/35 scoped projection/hook checks**, with a successful typecheck. Host-policy decisions, local installation, fresh loading, and real business continuation are separate evidence. Full Job/MCP integration retains unpassed cases: the candidate and prior source both produced **11/17** in the recorded environment. See the [validation scope and retained failures](docs/PUBLIC-UPDATE-20261117.md).
+The layout changes passed independent source Review and separate verifier read-only stdio checks for project-local and external bindings. The related regression package completed **65/65**, and typecheck passed. A synthetic approved Job start/query is not a complete business implementation/Review/QA cycle. A Windows case-sensitive-directory branch remains unrun on the tested volume; historical integration failures and UNKNOWN are retained. See the [validation scope and retained limits](docs/PUBLIC-UPDATE-20261120.md).
 
 The supported MCP QA runner retains its exact Node **24.19.0 / 24.20.0**, single frozen command, and **90-second maximum** boundary. Browser/UI, game engines, other hosts, unattended operation, clean-machine installation, and long-term savings require their own evidence. The source update does not establish a measured bug-reduction or token-saving percentage.
 

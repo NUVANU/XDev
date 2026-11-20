@@ -1,11 +1,12 @@
 import { closeSync, fsyncSync, lstatSync, mkdirSync, openSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, parse, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { projectLocalLayout } from '../src/job-runtime/storage-identity.ts';
 import { bytes, loadConfig, need, noLinks, within } from './configure.ts';
 import type { LocalConfig } from './configure.ts';
 
 // Local setup only: never creates a Job, approves a request, registers a host,
-// writes project files, or removes/repairs an existing data directory.
+// writes product source files, or removes/repairs an existing data directory.
 const USAGE='node --experimental-strip-types mcp/local.ts init --project-root ABS_EXISTING_PROJECT --data-root ABS_NEW_DATA --project-id ID [--stage-inputs]';
 function present(path:string) {try{lstatSync(path);return true;}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return false;throw e;}}
 function localPath(path:string) {
@@ -26,7 +27,7 @@ function directoryBinding(path:string) {
 }
 const sameNativeName=(a:string,b:string)=>process.platform==='win32'?a.toLowerCase()===b.toLowerCase():a===b;
 export function runLocalSetup(args:string[]) {
-  const created:string[]=[];let mutationAttempted=false,dataRoot:string|null=null;
+  const created:string[]=[];let mutationAttempted=false,projectLocal=false,dataRoot:string|null=null;
   try {
     need(args[0]==='init','LOCAL_SETUP_USAGE:'+USAGE);
     const values=new Map<string,string>();let stageInputs=false;
@@ -41,11 +42,16 @@ export function runLocalSetup(args:string[]) {
     const projectRoot=values.get('--project-root')!,projectId=values.get('--project-id')!;dataRoot=values.get('--data-root')!;
     need(projectId.trim().length>0&&projectId.length<256,'LOCAL_SETUP_PROJECT_ID_INVALID');
     localPath(projectRoot);localPath(dataRoot);need(present(projectRoot)&&lstatSync(projectRoot).isDirectory(),'LOCAL_SETUP_EXISTING_PROJECT_DIRECTORY_REQUIRED');
-    need(!within(projectRoot,dataRoot)&&!within(dataRoot,projectRoot),'LOCAL_SETUP_PROJECT_DATA_OVERLAP');
+    projectLocal=dataRoot===projectLocalLayout(projectRoot).dataRoot;
+    need(projectLocal||!within(projectRoot,dataRoot)&&!within(dataRoot,projectRoot),'LOCAL_SETUP_PROJECT_DATA_OVERLAP');
     need(!present(dataRoot),'LOCAL_SETUP_DATA_ALREADY_EXISTS');
     const parent=dirname(dataRoot);localPath(parent);need(present(parent)&&lstatSync(parent).isDirectory(),'LOCAL_SETUP_EXISTING_DATA_PARENT_REQUIRED');
     const projectBinding=directoryBinding(projectRoot),parentBinding=directoryBinding(parent),physicalData=join(parentBinding.path,basename(dataRoot));
-    need(!within(projectBinding.path,physicalData)&&!within(physicalData,projectBinding.path)&&!(projectBinding.dev===parentBinding.dev&&projectBinding.ino===parentBinding.ino),'LOCAL_SETUP_PROJECT_DATA_PHYSICAL_OVERLAP');
+    const sameParent=projectBinding.dev===parentBinding.dev&&projectBinding.ino===parentBinding.ino;
+    const physicalLayoutValid=projectLocal
+      ? sameParent&&sameNativeName(physicalData,projectLocalLayout(projectBinding.path).dataRoot)
+      : !sameParent&&!within(projectBinding.path,physicalData)&&!within(physicalData,projectBinding.path);
+    need(physicalLayoutValid,'LOCAL_SETUP_PROJECT_DATA_PHYSICAL_OVERLAP');
     need(!present(physicalData),'LOCAL_SETUP_DATA_ALREADY_EXISTS');
     // Fail closed on alternate names (including resolved short/SUBST names).
     // Never grant the original lexical config an unverified physical binding.
@@ -68,7 +74,7 @@ export function runLocalSetup(args:string[]) {
   } catch(error) {
     return {exit_code:1,result:{format:'xdev-local-setup-result-1',status:mutationAttempted?'PARTIAL_OR_UNKNOWN':'REFUSED',
       code:error instanceof Error?error.message:String(error),data_root:dataRoot,created_paths:created,may_have_side_effects:mutationAttempted,
-      operation_completion:mutationAttempted?'UNKNOWN':'NOT_STARTED',cleanup_performed:false,project_written:false,
+      operation_completion:mutationAttempted?'UNKNOWN':'NOT_STARTED',cleanup_performed:false,project_written:projectLocal&&created.length>0,
       task_ready:false,execution_allowed:false,job_created:false,host_registered:false}};
   }
 }

@@ -6,6 +6,7 @@ import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readF
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { JobStore, canonical, productionJobRoot } from '../job-runtime/store.ts';
+import { assertProjectLocalDirectories, isProjectLocalControl, isProjectLocalDataPath, isProjectLocalScopePath, projectLocalLayout } from '../job-runtime/storage-identity.ts';
 import type { EvidenceRef, Job, JobCommand, JobId } from '../job-runtime/contracts.ts';
 import { inspectSupervisedProfile, assertSupervisedWindow } from './supervised-profile.ts';
 import { inspectSupervisedRequirements, allowsCombinedChecker } from './supervised-requirements.ts';
@@ -50,11 +51,21 @@ function readRef(ref: FileRef) { exact(ref, ['path','sha256']); need(word(ref.pa
 function json(path: string): any { return parseD1UniqueJson(file(path).toString('utf8')); }
 function validRelative(p: unknown): p is string { return word(p) && !isAbsolute(p) && !p.includes('\\') && !p.includes(':') && !p.split('/').some(s => !s || s === '.' || s === '..'); }
 function strings(v: unknown): v is string[] { return Array.isArray(v) && v.every(word) && new Set(v).size === v.length; }
-export function supervisedManifest(root: string,boundary?:FileRef|null): Member[] {
-  if(boundary)return boundaryManifest(root,boundary);
-  safePath(root); need(lstatSync(root).isDirectory(), 'SUPERVISED_PROJECT_INVALID'); const out: Member[] = [];
+export function supervisedManifest(root: string,boundary?:FileRef|null,controlRoot?:string): Member[] {
+  const local=isProjectLocalControl(root,controlRoot)?projectLocalLayout(root):null;
+  if(boundary&&!local)return boundaryManifest(root,boundary);
+  safePath(root); need(lstatSync(root).isDirectory(), 'SUPERVISED_PROJECT_INVALID');
+  if(local){
+    need(!boundary,'SUPERVISED_PROJECT_LOCAL_MEMORY_BOUNDARY_UNSUPPORTED');
+    assertProjectLocalDirectories(root);
+  }
+  const out: Member[] = [];
   const visit = (dir: string) => { for (const name of readdirSync(dir).sort()) { const path=join(dir,name), st=lstatSync(path);
     need(!st.isSymbolicLink(), 'SUPERVISED_LINK_REJECTED');
+    if(local&&dir===local.dataRoot&&isProjectLocalDataPath(root,path)){
+      if(path===local.configPath)need(st.isFile()&&st.nlink===1,'SUPERVISED_PROJECT_LOCAL_CONFIG_INVALID');
+      continue;
+    }
     if (st.isDirectory()) visit(path); else { need(st.isFile(), 'SUPERVISED_MEMBER_INVALID'); out.push({path:relative(root,path).split(sep).join('/'),sha256:sha(file(path))}); }
     need(out.length <= 4096, 'SUPERVISED_PROJECT_TOO_LARGE');
   }}; visit(root); return out.sort((a,b)=>a.path.localeCompare(b.path,'en'));
@@ -63,7 +74,13 @@ function validateRequest(r: Request,projectId?:string,projectRoot?:string,contro
   const v5=r.format==='xdev-supervised-request-5',v4=r.format==='xdev-supervised-request-4'||v5,v3=r.format==='xdev-supervised-request-3'||v4,v2=r.format==='xdev-supervised-request-2'||v3;exact(r,['format','spec','allowed_scope','forbidden_scope','acceptance_criteria','commands','excluded_scope',...(v5?['check_requirements','authorization']:v2?['profile','authorization']:[]),...(v3?['preparation']:[]),...(v4?['task_context','memory_boundary']:[])]);
   need((r.format==='xdev-supervised-request-1'||v2) && strings(r.allowed_scope) && r.allowed_scope.length>0 && r.allowed_scope.every(validRelative) && strings(r.forbidden_scope) && r.forbidden_scope.every(validRelative) && Array.isArray(r.excluded_scope) && r.excluded_scope.length===0, 'SUPERVISED_SCOPE_INVALID');
   const spec=parseD1UniqueJson(readRef(r.spec)) as any;
-  externalPolicy(spec,r.format,readRef);
+  const projectLocal=projectRoot!==undefined&&isProjectLocalControl(projectRoot,controlRoot);
+  const policy=externalPolicy(spec,r.format,readRef);
+  if(projectLocal){
+    need(!policy,'SUPERVISED_PROJECT_LOCAL_EXTERNAL_SOURCE_UNSUPPORTED');
+    need(!r.memory_boundary,'SUPERVISED_PROJECT_LOCAL_MEMORY_BOUNDARY_UNSUPPORTED');
+    need(r.allowed_scope.every(path=>!isProjectLocalScopePath(projectRoot,join(projectRoot,path))),'SUPERVISED_PROJECT_LOCAL_DATA_OUTSIDE_SCOPE');
+  }
   need(word(spec.goal)&&canonical(spec.acceptance_criteria)===canonical(r.acceptance_criteria)&&
     canonical(spec.allowed_scope)===canonical(r.allowed_scope)&&canonical(spec.forbidden_scope)===canonical(r.forbidden_scope)&&
     canonical(spec.quality_commands)===canonical(r.commands),'SUPERVISED_SPEC_REQUEST_MISMATCH');
@@ -77,6 +94,7 @@ function validateRequest(r: Request,projectId?:string,projectRoot?:string,contro
     // Node only, no eval/preload/alternate executable. Every named file is a
     // project member; the frozen Node flags are deliberately narrow.
     need(c.argv.every(a=>a==='--test'||a==='--test-reporter=tap'||(validRelative(a)&&!a.startsWith('-'))) && c.argv.some(a=>validRelative(a)&&!a.startsWith('-')), 'SUPERVISED_COMMAND_INVALID');
+    if(projectLocal)need(c.argv.every(path=>!isProjectLocalScopePath(projectRoot,join(projectRoot,path))),'SUPERVISED_PROJECT_LOCAL_DATA_OUTSIDE_SCOPE');
     // Only explicit TAP protocol tokens are interpreted, never role/goal prose.
     // Freeze both flags before start's first Store/claim side effect.
     const tap=c.required_output.some(v=>/^(?:TAP version \d+|(?:not )?ok \d+(?:\b|$)|1\.\.\d+(?:\b|$)|# (?:tests|pass|fail) \d+(?:\b|$))/.test(v));
@@ -194,7 +212,11 @@ function checkerSeparation(c:any,id:JobId,impl:string|string[],review:Session,qa
   readRef(next.response);
   if(completed)need(qa.natural_final?.path!==review.natural_final?.path&&qa.natural_final?.sha256!==review.natural_final?.sha256,'SUPERVISED_DISTINCT_FINALS_REQUIRED');
 }
-function open(s: Subject) { safePath(s.projectRoot);safePath(s.controlRoot);need(lstatSync(s.controlRoot).isDirectory(),'SUPERVISED_CONTROL_PARENT_REQUIRED');return new JobStore(productionJobRoot(s.controlRoot,s.projectId),{project_id:s.projectId,workspace_root:s.projectRoot}); }
+export function openSupervisedStore(s: Subject) {
+  safePath(s.projectRoot);safePath(s.controlRoot);need(lstatSync(s.controlRoot).isDirectory(),'SUPERVISED_CONTROL_PARENT_REQUIRED');
+  return new JobStore(productionJobRoot(s.controlRoot,s.projectId),{project_id:s.projectId,workspace_root:s.projectRoot},
+    {projectLocalSupervised:isProjectLocalControl(s.projectRoot,s.controlRoot)});
+}
 function evidence(store: JobStore, ref: EvidenceRef): any { need(ref.id===join(store.root,'evidence',ref.sha256+'.json'),'SUPERVISED_EVIDENCE_OUTSIDE_STORE');const bytes=file(ref.id);need(sha(bytes)===ref.sha256,'SUPERVISED_EVIDENCE_DRIFT');const value=parseD1UniqueJson(bytes.toString('utf8'));need(canonical(value)+'\n'===bytes.toString('utf8'),'SUPERVISED_EVIDENCE_INVALID');return value; }
 // A persisted Job has already admitted its initial inputs. Reopen the pinned
 // preparation and original entry without comparing mutable code to its initial hash.
@@ -211,6 +233,14 @@ function stages(store: JobStore,j: Job) { return j.tasks[0]!.verification.receip
 function latest(store: JobStore,j: Job, kind: string) { return stages(store,j).filter(s=>s.value.format===kind).at(-1); }
 function mutation(store: JobStore,id: JobId,c: JobCommand) {return store.mutate(id,store.getJob(id).revision,c);}
 function scope(c: any,current: Member[]) {const before=new Map<string,string>(c.baseline.map((m:Member)=>[m.path,m.sha256])),after=new Map(current.map(m=>[m.path,m.sha256]));const changed=[...new Set([...before.keys(),...after.keys()])].filter(p=>before.get(p)!==after.get(p));need(changed.every(p=>c.request.allowed_scope.includes(p)&&!c.request.forbidden_scope.some((f:string)=>p===f||p.startsWith(f+'/'))),'SUPERVISED_SCOPE_VIOLATION');return changed;}
+function checkProjectLocalCommands(commands: Command[], current: Member[]) {
+  const members=new Set(current.map(m=>m.path));
+  for(const command of commands){
+    const files=command.argv.filter(arg=>!arg.startsWith('-'));
+    const entrypoints=command.argv.includes('--test')?files:files.slice(0,1);
+    need(entrypoints.every(path=>members.has(path)),'SUPERVISED_PROJECT_LOCAL_COMMAND_MEMBER_REQUIRED');
+  }
+}
 function checkManifest(r: any,current: Member[]) {need(hex(r.manifest_sha256)&&r.manifest_sha256===digest(current),'SUPERVISED_VERSION_DRIFT');}
 /** Read-only shape/version inspection. It grants no role decision, Job readiness
  * or execution permission; recordSupervised remains the stateful authority. */
@@ -238,7 +268,7 @@ export function inspectSupervisedInput(s:Subject,kind:'request'|'record',source:
     for(const [i,c] of r.checks.entries()){exact(c,['id','passed','reason']);need(word(c.id)&&word(c.reason),'SUPERVISED_DECISION_INCOMPLETE:checks.'+i);need(typeof c.passed==='boolean','SUPERVISED_BOOLEAN_REQUIRED:checks.'+i+'.passed');}
     for(const key of role==='qa'?['qa_pass']:['scope_pass',...preparationFields])need(typeof r[key]==='boolean','SUPERVISED_BOOLEAN_REQUIRED:'+key);
   }
-  if(boundary)inspectRequestHealth(s,{memory_boundary:boundary});checkManifest(r,supervisedManifest(s.projectRoot,boundary));
+  if(boundary)inspectRequestHealth(s,{memory_boundary:boundary});checkManifest(r,supervisedManifest(s.projectRoot,boundary,s.controlRoot));
   return {kind,shape_checked:true,manifest_checked:true,role_decision:'NOT_EVALUATED',job_executability:'NOT_EVALUATED',session_proof:'NOT_EVALUATED',record_contract:'JOB_SPECIFIC_REQUIREMENTS_NOT_EVALUATED'};
 }
 function independentDecision(r: any,c: any,external=false) {
@@ -297,7 +327,7 @@ function checkedQaRun(store:JobStore,j:Job,c:any,run:any,claim:any) {
   need(typeof run.value.passed==='boolean'&&run.value.passed===(all&&run.value.manifest_sha256===run.value.after_manifest_sha256),'SUPERVISED_QA_RUN_DECISION_MISMATCH');
 }
 function recoveryContext(s:Subject,store:JobStore,j:Job){
-  const c=contract(store,j),current=supervisedManifest(s.projectRoot,c.request.memory_boundary),manifest=digest(current);scope(c,current);
+  const c=contract(store,j),current=supervisedManifest(s.projectRoot,c.request.memory_boundary,s.controlRoot),manifest=digest(current);scope(c,current);
   need(c.entry?.decision?.selected_profile!=='prototype','SUPERVISED_RECOVERY_PROTOTYPE_UNSUPPORTED');
   need(j.runs.length===1,'SUPERVISED_IMPLEMENTATION_REQUIRED');const implementation=evidence(store,j.runs[0]!.evidence_refs[0]!);
   readRef(implementation.source);readRef(implementation.record.job_release);checkManifest(implementation,current);
@@ -339,7 +369,7 @@ function recoveryPermit(s:Subject,j:Job,ctx:ReturnType<typeof recoveryContext>,r
   return p;
 }
 function finalizeQa(s:Subject,id:JobId,source:FileRef,expected:FinalExpected,recovery?:{request:any;source:FileRef;guard:()=>void}){
-  const store=open(s);
+  const store=openSupervisedStore(s);
   const replay=(view:{job:Job},ctx:ReturnType<typeof recoveryContext>)=>{
     if(!ctx.final)return false;
     originalQaRecord(s,store,view.job,ctx,source);
@@ -380,7 +410,7 @@ export function recoverSupervisedQa(s:Subject,id:JobId,source:string,guard:()=>v
 export function inspectSupervisedRecovery(s:Subject,id:JobId,record?:FileRef){
   const base={format:'xdev-supervised-recovery-status-1',job_id:id,execution_allowed:false,claim_reset:false,qa_rerun_allowed:false,native_identity_authenticated:false,global_descendant_closure:'NOT_CLAIMED'};
   let expected_revision:number|null=null,expected_head_sha256:string|null=null,refs:any=null,execution_status='NOT_KNOWN';
-  try{const store=open(s),view=store.inspectD1Journal(id);expected_revision=view.revision;expected_head_sha256=view.head_sha256;
+  try{const store=openSupervisedStore(s),view=store.inspectD1Journal(id);expected_revision=view.revision;expected_head_sha256=view.head_sha256;
     const ctx=recoveryContext(s,store,view.job);refs={task_id:view.job.tasks[0]!.task_id,spec_sha256:ctx.c.request.spec.sha256,manifest_sha256:ctx.manifest,original_request:ctx.c.source,qa_request:ctx.run?.value.source??ctx.claim?.value.source??null,claim_ref:ctx.claim?.ref??null,qa_receipt:ctx.run?.ref??null,operation_key:ctx.claim?.ref.sha256??null};
     execution_status=ctx.run?(ctx.run.value.passed?'PASSED_PERSISTED':'FAILED_OR_INCOMPLETE'):ctx.claim?'UNKNOWN_CLAIM_ONLY':'NOT_CLAIMED';
     if(ctx.final){originalQaRecord(s,store,view.job,ctx,ctx.final.value.source);need(ctx.final.value.passed!==true||view.job.state==='VERIFIED','SUPERVISED_FINAL_PARTIAL_COMMIT_BLOCKED');return{...base,status:'ALREADY_FINALIZED',execution_status,closure_status:'ORIGINAL_FINAL_RECORDED',recovery_status:'READ_ONLY_RECONCILED',expected_revision,expected_head_sha256,final_expected:ctx.final.value.finalization??null,refs,missing_items:[],next_steps:[],delivery_allowed:querySupervised(s,id).delivery_allowed};}
@@ -391,8 +421,8 @@ export function inspectSupervisedRecovery(s:Subject,id:JobId,record?:FileRef){
 }
 
 export function startSupervised(s: Subject, source: string) {
-  const bytes=file(source),request=json(source) as Request;const entry=validateRequest(request,s.projectId,s.projectRoot,s.controlRoot);assertSupervisedWindow(entry);inspectRequestHealth(s,request);const baseline=supervisedManifest(s.projectRoot,request.memory_boundary);
-  const sourcePolicy=externalPolicy(parseD1UniqueJson(readRef(request.spec)),request.format,readRef);externalInputSubset(sourcePolicy,baseline);const store=open(s);
+  const bytes=file(source),request=json(source) as Request;const entry=validateRequest(request,s.projectId,s.projectRoot,s.controlRoot);assertSupervisedWindow(entry);inspectRequestHealth(s,request);const baseline=supervisedManifest(s.projectRoot,request.memory_boundary,s.controlRoot);
+  const sourcePolicy=externalPolicy(parseD1UniqueJson(readRef(request.spec)),request.format,readRef);externalInputSubset(sourcePolicy,baseline);const store=openSupervisedStore(s);
   const startClaim=entry?consumeStart(s,source,sha(bytes),entry):null;
   const value={format:'xdev-supervised-contract-1',source:{path:source,sha256:sha(bytes)},request,baseline,baseline_sha256:digest(baseline),...(entry?{entry,start_claim:startClaim}:{})};
   const encoded=canonical(value)+'\n',ref={id:join(store.root,'evidence',sha(encoded)+'.json'),sha256:sha(encoded)},controls={budget_ref:ref,control_ref:ref,allocation_ref:ref};
@@ -401,11 +431,11 @@ export function startSupervised(s: Subject, source: string) {
   return currentProgressResult(s,created.job_id,{...created,task_id:store.getJob(created.job_id).tasks[0]!.task_id,revision:store.getJob(created.job_id).revision,mode:'supervised',entry,preparation_verified:['xdev-supervised-request-3','xdev-supervised-request-4','xdev-supervised-request-5'].includes(request.format),baseline_sha256:digest(baseline),next_host_action:request.format==='xdev-supervised-request-5'?{role:'implementation',action:sourcePolicy?'HOST_IMPLEMENT_OR_ADOPT_EXTERNAL_ARTIFACT_AND_RECORD_SOURCE':'HOST_IMPLEMENT_AND_RECORD_ORIGINAL_NATURAL_FINAL',process_owner:'HOST',automatic_dispatch:false}:{role:'implementation',action:'DISPATCH_SEPARATE_PUBLIC_WORKER_THEN_RECORD_NATURAL_FINAL'},strict_d1_pass:false});
 }
 export function recordSupervised(s: Subject,id: JobId,source: string) {
-  const store=open(s),view=store.inspectD1Journal(id),j=view.job,c=contract(store,j),r=json(source),sourceRef={path:source,sha256:sha(file(source))};
+  const store=openSupervisedStore(s),view=store.inspectD1Journal(id),j=view.job,c=contract(store,j),r=json(source),sourceRef={path:source,sha256:sha(file(source))};
   inspectRequestHealth(s,c.request);
   if(r.role==='qa'){need(c.entry?.decision?.selected_profile!=='prototype','SUPERVISED_PROTOTYPE_NO_FORMAL_RECORD');return finalizeQa(s,id,{path:source,sha256:sha(file(source))},{revision:view.revision,head_sha256:view.head_sha256});}
   const inspect=(job:Job)=>{
-    const c=contract(store,job),current=supervisedManifest(s.projectRoot,c.request.memory_boundary),t=job.tasks[0]!;
+    const c=contract(store,job),current=supervisedManifest(s.projectRoot,c.request.memory_boundary,s.controlRoot),t=job.tasks[0]!;
     need(sha(file(source))===sourceRef.sha256&&canonical(json(source))===canonical(r),'SUPERVISED_RECORD_ORIGINAL_SOURCE_DRIFT');
     need(!(r.session?.format==='xdev-supervised-public-session-2'&&c.entry?.decision?.selected_profile==='prototype'),'SUPERVISED_DOT_PROTOTYPE_UNSUPPORTED');
     need(r.format==='xdev-supervised-record-1'&&r.job_id===id&&['implementation','review'].includes(r.role),'SUPERVISED_RECORD_INVALID');
@@ -480,7 +510,7 @@ export function recordSupervised(s: Subject,id: JobId,source: string) {
   return currentProgressResult(s,id,result??completed(store.getJob(id),false)!);
 }
 export function qaSupervised(s: Subject,id: JobId,source: string,selfCheck=false) {
-  const store=open(s),j=store.getJob(id),c=contract(store,j),r=json(source),current=supervisedManifest(s.projectRoot,c.request.memory_boundary),review=latest(store,j,'xdev-supervised-review-1');
+  const store=openSupervisedStore(s),j=store.getJob(id),c=contract(store,j),r=json(source),current=supervisedManifest(s.projectRoot,c.request.memory_boundary,s.controlRoot),review=latest(store,j,'xdev-supervised-review-1');
   inspectRequestHealth(s,c.request);
   const prototype=c.entry?.decision?.selected_profile==='prototype';need(!(prototype&&r.session?.format==='xdev-supervised-public-session-2'),'SUPERVISED_DOT_PROTOTYPE_UNSUPPORTED');need(prototype===selfCheck,'SUPERVISED_PROFILE_EXECUTION_MISMATCH');assertSupervisedWindow(c.entry);
   const implRef=j.runs[0]?.evidence_refs[0],implementation=implRef?evidence(store,implRef):null,external=isExternalImplementation(implementation?.record.session);
@@ -491,6 +521,7 @@ export function qaSupervised(s: Subject,id: JobId,source: string,selfCheck=false
   sourceCompatible(implementation.record.session,r.session);readRef(implementation.source);readRef(implementation.record.job_release);checkManifest(implementation,current);
   need(!latest(store,j,'xdev-supervised-qa-claim-1')&&!latest(store,j,'xdev-supervised-qa-run-1'),'SUPERVISED_QA_ALREADY_CLAIMED');if(!prototype){proof(review!.value.record.session,'review',true,allowsCombinedChecker(c),dotBinding(c,j,digest(current)));readRef(review!.value.source);checkManifest(review!.value,current);
     const writer=inspectSupervisedWriterCapability(store.root,id);need(writer.status==='SUPPORTED',writer.status==='UNSUPPORTED'?writer.code:'SUPERVISED_WRITER_CAPABILITY_UNAVAILABLE');}
+  if(isProjectLocalControl(s.projectRoot,s.controlRoot))checkProjectLocalCommands(c.request.commands,current);
   // The original revision is the atomic compare-and-append boundary. Never
   // refresh it after checking for a claim. A crash consumes this Job's QA slot.
   const priorCheck=prototype?{requirement:'implementation',passed:true,evidence_refs:[j.runs[0]!.evidence_refs[0]!]}:{requirement:'review',passed:true,evidence_refs:[review!.ref]};
@@ -502,15 +533,15 @@ export function qaSupervised(s: Subject,id: JobId,source: string,selfCheck=false
     const skipped=/(?:#|ℹ)\s*(?:skipped|cancelled|todo|fail)\s+[1-9]\d*\b/.test(stdout+'\n'+stderr);
     return {id:cmd.id,executable:process.execPath,executable_sha256:sha(readFileSync(process.execPath)),argv:cmd.argv,cwd:s.projectRoot,started_at,ended_at,stdout,stderr,stdout_base64:(result.stdout??Buffer.alloc(0)).toString('base64'),stderr_base64:(result.stderr??Buffer.alloc(0)).toString('base64'),stdout_sha256:sha(result.stdout??Buffer.alloc(0)),stderr_sha256:sha(result.stderr??Buffer.alloc(0)),stdout_bytes:result.stdout?.length??0,stderr_bytes:result.stderr?.length??0,exit_code:result.status,signal:result.signal,error:result.error?{code:(result.error as NodeJS.ErrnoException).code??null,message:result.error.message}:null,timeout_ms:cmd.timeout_ms,output_limit_bytes_per_stream:65536,complete,skipped_or_failed_summary:skipped,passed:complete&&result.status===0&&!skipped&&cmd.required_output.every((text:string)=>stdout.includes(text)||stderr.includes(text))};});
   contract(store,j); // Recheck imported materials after command execution.
-  inspectRequestHealth(s,c.request);const after=supervisedManifest(s.projectRoot,c.request.memory_boundary),passed=digest(current)===digest(after)&&outputs.every((o:any)=>o.passed);
+  inspectRequestHealth(s,c.request);const after=supervisedManifest(s.projectRoot,c.request.memory_boundary,s.controlRoot),passed=digest(current)===digest(after)&&outputs.every((o:any)=>o.passed);
   const value={format:'xdev-supervised-qa-run-1',prototype,claim_ref:claimRef,session:r.session,source:{path:source,sha256:sha(file(source))},manifest_sha256:digest(current),after_manifest_sha256:digest(after),outputs,passed,global_descendant_closure:'NOT_CLAIMED'};
   const ref=store.persistEvidence(value);receipt(store,j,value,'PARTIALLY_VERIFIED',[priorCheck,{requirement:prototype?'self-check':'qa-execution',passed,evidence_refs:passed?[ref]:[]}],j.revision+1);
   return currentProgressResult(s,id,{job_id:id,qa_receipt:ref,commands_passed:passed,delivery_allowed:false,next_host_action:prototype?null:{role:'qa',action:'AWAIT_NATURAL_FINAL_THEN_RECORD_QA'},status:prototype?'PROTOTYPE_UNVERIFIED':'QA_EXECUTED_PENDING_FINAL',strict_d1_pass:false});
 }
 export function querySupervised(s: Subject,id: JobId) {
-  const store=open(s),j=store.getJob(id);let reasons:string[]=[],version:string|null=null,entry:any=null,prototype=false,selfCheckState='NOT_RUN',provenance='COORDINATOR_TRANSFERRED_PUBLIC_TOOLS';
+  const store=openSupervisedStore(s),j=store.getJob(id);let reasons:string[]=[],version:string|null=null,entry:any=null,prototype=false,selfCheckState='NOT_RUN',provenance='COORDINATOR_TRANSFERRED_PUBLIC_TOOLS';
   let progress:PrimaryProgress={binding:'UNKNOWN',persisted_state:j.state,profile:null,authorization:'UNKNOWN',permissions:{source:'CORE_CONTRACT_NO_ADDITIONAL_LOCAL_GATE',write_jobs:true,execute_qa:true},implementation_recorded:null,review_recorded:null,review_passed:null,qa_claimed:null,qa_run:'UNKNOWN',qa_final_recorded:null,delivery_verified:null};
-  try{const c=contract(store,j);inspectRequestHealth(s,c.request);const current=supervisedManifest(s.projectRoot,c.request.memory_boundary);entry=c.entry??null;prototype=entry?.decision?.selected_profile==='prototype';version=digest(current);scope(c,current);
+  try{const c=contract(store,j);inspectRequestHealth(s,c.request);const current=supervisedManifest(s.projectRoot,c.request.memory_boundary,s.controlRoot);entry=c.entry??null;prototype=entry?.decision?.selected_profile==='prototype';version=digest(current);scope(c,current);
     if(c.request.format==='xdev-supervised-request-5')progress.check_requirements=entry.requirements;progress.profile=entry?.decision?.selected_profile??null;try{assertSupervisedWindow(entry);progress.authorization=entry?'CURRENT':'UNKNOWN';}catch{progress.authorization='STOPPED_OR_EXPIRED';}
     if(j.runs.length===0){need(stages(store,j).length===0,'SUPERVISED_STAGE_WITHOUT_IMPLEMENTATION');progress={...progress,binding:'CHECKED',implementation_recorded:false,review_recorded:false,review_passed:null,qa_claimed:false,qa_run:'NOT_RUN',qa_final_recorded:false};}
     let reviewed:boolean|null=null;

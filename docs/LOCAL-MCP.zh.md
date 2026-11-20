@@ -36,11 +36,13 @@ node --experimental-strip-types mcp/configure.ts --host codex
 node --experimental-strip-types mcp/local.ts init --project-root 'C:\Projects\my-project' --data-root 'C:\XDevData\my-project-new' --project-id my-project
 ```
 
-上述路径是需替换的示例，不代表本机已有这些工程。project-root 必须是已有的规范化绝对目录，data-root 必须全新且父目录已存在，两者不能互相包含，路径及祖先不能经过符号链接/junction。Windows init 当前只支持普通盘符绝对路径；UNC、设备路径、扩展前缀（包括 `\\?\`、`\\.\`）及非普通盘符命名空间明确 UNSUPPORTED，在访问/创建前拒绝。路径有空格可正常引用；非法段、设备名和尾点/尾空格拒绝。
+project-root 必须是已有的规范化绝对目录，data-root 必须全新且父目录已存在。外置布局的两个根须分离。项目内布局只接受工程根下直属的 `.xdev`。路径及祖先不能经过符号链接或 junction。Windows init 支持普通盘符绝对路径，拒绝 UNC、设备路径、扩展前缀和非法路径段。
 
-已有工程与 data 父目录在创建前分别核 `realpathSync.native` 的实际位置及 BigInt dev/ino 身份（同一目录前后与解析目标一致、ino 非零），再用真实父目录组合尚未存在的 data 叶名做双向分离检查。不能确定身份或分离就拒绝；若短名/SUBST 等别名解析后的普通物理名称与输入不同（不计Windows大小写），当前 init 明确 `PHYSICAL_PATH_ALIAS_UNSUPPORTED`，不自动接受别名。请使用实际长路径及物理盘符；不宣称跨所有文件系统别名支持。这是创建前检查，不是抵御恶意并发替换目录/盘符的OS沙箱。数据不放在工程内，避免控制证据被当作工程变更。
+创建前检查工程与 data 父目录的真实路径及磁盘目录身份。外置布局检查物理分离，项目内布局要求 data 父目录就是工程根。使用实际长路径及物理盘符。输入路径经解析后名称改变时，init 拒绝该别名（Windows 忽略大小写）。
 
-init 仅在 data-root 建立 control、input、local-config.json，工程字节不改，不创建 Job/claim。配置使用既有 `xdev-local-mcp-1` 模式及 loadConfig 检查，显式设置 `stage_inputs:false, write_jobs:false, execute_qa:false, approved_requests:[]`。仅在需要暂存公开输入时显式增加 `--stage-inputs`，这仍不授予写 Job/执行许可。
+需要项目内布局时，将 `--data-root` 指向 `C:\Projects\my-project\.xdev`，再用其中的 `local-config.json` 绑定宿主。MCP 加载时验证固定的 `.xdev/control`、`.xdev/input` 和 `.xdev/local-config.json`。受监督任务的源码清单排除这三个路径，`.xdev` 内的其他文件仍正常检查。启用 XSpec 接收、XMem bridge 或外部实施产物采用时，使用外置布局。
+
+init 仅在 data-root 建立 control、input、local-config.json。现有产品文件保持原样。配置使用 `xdev-local-mcp-1`，默认 `stage_inputs:false, write_jobs:false, execute_qa:false, approved_requests:[]`。可使用 `--stage-inputs` 启用公开输入暂存。Job 创建和 QA 执行各自沿用本地批准流程。
 
 成功输出 JSON `status:CONFIGURED`，含 `config:{path,sha256}`、`permissions`、`stdio:{command,args}` 以及 `codex_registration:{argv,executed:false}`。Node、server 和 config 都是实际绝对路径，server 取自当前运行的 local.ts 所在源码位置；安装到稳定目录后从该目录执行 init，输出即绑定该目录，无需变量替换。协调员按 shell 规则引用 argv 的每项并执行注册；init 本身不改宿主。`task_ready/execution_allowed/job_created/host_registered` 均 false，只表示配置完成。
 
@@ -50,7 +52,7 @@ init 仅在 data-root 建立 control、input、local-config.json，工程字节�
 
 默认只读：context、prepare、status、result。prepare 的 source 是 `{ "path": "绝对路径", "sha256": "当前64位小写SHA256" }`。所有输入及嵌套 FileRef（含 purpose_source）只能在 input 内；链接、硬链接、漂移、额外 FileRef 字段和越界均拒绝。JSON 不允许重复键。远端不提供任意读文件、任意 shell、改根或批准工具。
 
-需要追加输入时，init 显式加 `--stage-inputs`；手工配置可设置 `"permissions":{"stage_inputs":true}`。`xdev_stage_input` 只在 input 追加最多256KiB的内容寻址文本/JSON，不写工程/control，不批准任务、不覆盖已存不同内容。允许JSON所引用的原件必须已存在于 input；按依赖到上层的顺序提交。
+需要追加输入时，可在 init 使用 `--stage-inputs` 或设置 `"permissions":{"stage_inputs":true}`。`xdev_stage_input` 只在配置的 input 目录追加最多 256 KiB 的内容寻址文本或 JSON。它不批准任务或覆盖其他内容。JSON 引用的原件必须已存在于 input，按依赖顺序提交。
 
 写Job前，由本机协调员从真实公开讨论整理原有 v3 request、preparation、规格、确认、设计、风险与有限授权原件到 input，并在本机配置增加：
 

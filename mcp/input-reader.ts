@@ -4,7 +4,7 @@ import { isAbsolute, join } from 'node:path';
 import { productionJobRoot } from '../src/job-runtime/store.ts';
 import { parseD1UniqueJson } from '../src/job-runtime/contracts.ts';
 import { parsePreparationJson, supervisedPreparationFormat } from '../src/host-surface/supervised-preparation.ts';
-import { bytes, exact, hash, need, noLinks, refShape, within } from './configure.ts';
+import { bytes, exact, hash, need, noLinks, refShape, withinConfiguredInput } from './configure.ts';
 import type { FileRef, LocalConfig } from './configure.ts';
 import { validateBoundary, boundaryWithin } from '../src/host-surface/project-memory-boundary.ts';
 import { externalPolicy } from '../src/host-surface/external-implementation-source.ts';
@@ -24,7 +24,7 @@ export function createInputReader(c:LocalConfig){
   const read=(ref:FileRef,internal=false)=>{
     refShape(ref);noLinks(ref.path);
     const claim=internal&&ref.path===join(c.control_root,'supervised-start-consumed',ref.path.split(/[\\/]/).at(-1)! )&&/^[a-f0-9]{64}\.json$/.test(ref.path.split(/[\\/]/).at(-1)!);
-    need(within(c.input_root,ref.path)||claim,'MCP_REFERENCE_OUTSIDE_INPUT_ROOT');
+    need(withinConfiguredInput(c,ref.path)||claim,'MCP_REFERENCE_OUTSIDE_INPUT_ROOT');
     const b=bytes(ref.path);need(hash(b)===ref.sha256,'MCP_INPUT_DRIFT');return b.toString('utf8');
   };
   const readEvidence=(ref:any)=>{exact(ref,['id','sha256']);need(typeof ref.sha256==='string'&&/^[a-f0-9]{64}$/.test(ref.sha256)&&ref.id===join(storeRoot,'evidence',ref.sha256+'.json'),'MCP_EVIDENCE_OUTSIDE_STORE');const b=bytes(ref.id);need(hash(b)===ref.sha256,'MCP_EVIDENCE_DRIFT');return parseD1UniqueJson(b.toString('utf8'));};
@@ -51,7 +51,7 @@ export function createInputReader(c:LocalConfig){
     if(value.format==='xdev-external-artifact-adoption-1'){
       exact(value,['format','job_id','task_id','spec_sha256','baseline_manifest_sha256','candidate_manifest_sha256','known_author_refs','adopting_host_ref','source_host',
         'completion_state','all_known_writers_ended','unknown_relevant_writers','public_evidence','artifact_root','author_input_manifest','artifact_manifest','transfers']);
-      noLinks(value.artifact_root);need(within(c.input_root,value.artifact_root),'MCP_EXTERNAL_ARTIFACT_OUTSIDE_INPUT_ROOT');
+      noLinks(value.artifact_root);need(withinConfiguredInput(c,value.artifact_root),'MCP_EXTERNAL_ARTIFACT_OUTSIDE_INPUT_ROOT');
       members(value.author_input_manifest);members(value.artifact_manifest);
       need(Array.isArray(value.public_evidence)&&value.public_evidence.length>=1&&value.public_evidence.length<=8,'MCP_EXTERNAL_PUBLIC_EVIDENCE_INVALID');
       for(const ref of value.public_evidence)material(ref,'external-public:',()=>{});

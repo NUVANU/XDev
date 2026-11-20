@@ -7,10 +7,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { closeSync, existsSync, fsyncSync, openSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { JobStore, canonical, productionJobRoot } from '../src/job-runtime/store.ts';
+import { canonical, productionJobRoot } from '../src/job-runtime/store.ts';
 import { parseD1UniqueJson } from '../src/job-runtime/contracts.ts';
 import type { JobId } from '../src/job-runtime/contracts.ts';
-import { prepareSupervised, startSupervised, recordSupervised, qaSupervised, querySupervised, supervisedManifest, inspectSupervisedInput, inspectSupervisedRequest, inspectSupervisedRecovery, recoverSupervisedQa } from '../src/host-surface/supervised-quality.ts';
+import { prepareSupervised, startSupervised, recordSupervised, qaSupervised, querySupervised, supervisedManifest, inspectSupervisedInput, inspectSupervisedRequest, inspectSupervisedRecovery, recoverSupervisedQa, openSupervisedStore } from '../src/host-surface/supervised-quality.ts';
 import { inspectPreflight, bindingFields } from './preflight.ts';
 import { capacity } from './capacity.ts';
 import type { PreflightOptions } from './preflight.ts';
@@ -49,7 +49,7 @@ function createBoundAdapter(local:ReturnType<typeof loadConfig>) {
   const approved=(ref:FileRef)=>{need((c.approved_requests??[]).some(a=>canonical(a)===canonical(ref)),'MCP_REQUEST_NOT_LOCALLY_APPROVED');const r=source(ref);need(['xdev-supervised-request-3','xdev-supervised-request-4','xdev-supervised-request-5'].includes(r.format),'MCP_V3_OR_V4_REQUEST_REQUIRED');return r;};
   const timeout=(r:any)=>{need(Array.isArray(r.commands)&&r.commands.every((v:any)=>Number.isSafeInteger(v.timeout_ms)&&v.timeout_ms>0)&&r.commands.reduce((n:number,v:any)=>n+v.timeout_ms,0)<=MAX_SYNC_QA_MS,'MCP_SYNC_QA_WINDOW_UNSUPPORTED');};
   const boundJob=(id:string)=>{
-    const store=new JobStore(storeRoot,{project_id:c.project_id,workspace_root:c.project_root});
+    const store=openSupervisedStore(s);
     const job=store.getJob(id as JobId);need(!job.d1_intake&&job.tasks.length===1,'MCP_SUPERVISED_JOB_REQUIRED');
     const contract=readEvidence(job.tasks[0]!.contract_ref) as any;need(contract.format==='xdev-supervised-contract-1','MCP_SUPERVISED_JOB_REQUIRED');
     const request=approved(contract.source);need(canonical(request)===canonical(contract.request),'MCP_JOB_REQUEST_MISMATCH');
@@ -60,7 +60,7 @@ function createBoundAdapter(local:ReturnType<typeof loadConfig>) {
   // Historical byte/graph binding, deliberately independent of old request
   // approvals and execution permissions. It grants no new write or execution.
   const recoveryJob=(id:string)=>{
-    const store=new JobStore(storeRoot,{project_id:c.project_id,workspace_root:c.project_root}),job=store.getJob(id as JobId);
+    const store=openSupervisedStore(s),job=store.getJob(id as JobId);
     need(!job.d1_intake&&job.tasks.length===1,'MCP_SUPERVISED_JOB_REQUIRED');const contract=readEvidence(job.tasks[0]!.contract_ref) as any;
     need(contract.format==='xdev-supervised-contract-1','MCP_SUPERVISED_JOB_REQUIRED');
     read(contract.source);graph(contract,true);graph(job,true);return{job,contract};
@@ -70,7 +70,7 @@ function createBoundAdapter(local:ReturnType<typeof loadConfig>) {
     mutationRoots();capacity(r,CAPACITY.request_json_bytes,'REQUEST');
     capacity(entry,CAPACITY.entry_json_bytes,'ENTRY');
   };
-  const manifestCapacity=()=>{const manifest=supervisedManifest(c.project_root,selectMemoryBoundary(c)?.ref);capacity(manifest,CAPACITY.manifest_json_bytes,'MANIFEST');return manifest;};
+  const manifestCapacity=()=>{const manifest=supervisedManifest(c.project_root,selectMemoryBoundary(c)?.ref,c.control_root);capacity(manifest,CAPACITY.manifest_json_bytes,'MANIFEST');return manifest;};
   const qaCapacity=(r:any)=>{
     need(isQaRuntimeSupported(process.versions.node),'MCP_QA_RUNTIME_UNSUPPORTED:'+process.versions.node);
     const upper=CAPACITY.qa_metadata_reserve_bytes+r.commands.reduce((n:number,cmd:any)=>n+QA_OUTPUT_JSON_BOUND+size(cmd),0);
@@ -141,7 +141,7 @@ function createBoundAdapter(local:ReturnType<typeof loadConfig>) {
     const {stdout_utf8,stderr_utf8,...transportMetadata}=fixedTransport as Record<string,unknown>;
     return{...value,diagnostic:{...diagnostic,fixed_read_transport:transportMetadata}};
   });
-  register('xdev_stage_input','Append a content addressed input artifact only. No project/control write; never approves a request. Requires local stage_inputs.',object({content:z.string().max(262144),media_type:z.enum(['application/json','text/plain'])}),false,(a,enterMutation)=>{
+  register('xdev_stage_input','Append a content-addressed artifact only in the configured input directory. Requires local stage_inputs and grants no request approval.',object({content:z.string().max(262144),media_type:z.enum(['application/json','text/plain'])}),false,(a,enterMutation)=>{
     permit('stage_inputs');mutationRoots();const b=Buffer.from(a.content,'utf8');need(b.length<=262144,'MCP_STAGED_INPUT_TOO_LARGE');
     if(a.media_type==='application/json'){const value=parseD1UniqueJson(a.content);graph(value);}
     const ref={path:join(c.input_root,hash(b)+(a.media_type==='application/json'?'.json':'.txt')),sha256:hash(b)};noLinks(ref.path);
