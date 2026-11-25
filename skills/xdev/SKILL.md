@@ -3,6 +3,10 @@ name: xdev
 description: Route approved project work by operation type and risk, inspect XDev local binding, and enter supervised product development when needed.
 ---
 
+## Codex 里程碑 Goal
+
+在 Codex 项目主统筹会话，进入已确认、已授权启动的当前开发里程碑时，按[里程碑 Goal](../../docs/CODEX-MILESTONE-GOAL.zh.md)核对任务卡和 XSpec 验收项，先读取当前 Goal，再提供一次「以此里程碑启动 Goal」与「稍后」的原生选项。用户明确选择当前里程碑后，重新核对范围、版本、授权和 Goal，才调用当前会话的 `create_goal`。缺宿主能力或用户选择稍后时直接继续正常 XDev 工作。
+
 ## MECH-03 有界持续推进
 
 按[有界持续推进](../../docs/R4-BOUNDED-CONTINUATION.zh.md)检查每次实现、Review、QA、修复或当前Job结束后的总目标与剩余AC。当前范围/版本、具体授权、独立性、预算/期限和证据前置成立时，协调者直接接续下一步；阶段报告用进度消息，不等待用户再说“继续”。实现者和独立检查者仍正常提交各自自然final及原回执，由协调者接收后继续，不能省略Review、实际QA、验收或已获授权的安装。
@@ -11,7 +15,7 @@ description: Route approved project work by operation type and risk, inspect XDe
 
 阻塞在现有交接记录原因、原证据、依赖范围、解除条件、尝试和消费。停止受影响路径，已有授权内明确处置后可继续确实独立的工作；权限不足、产品决定、付费/安全变化、缺证据或UNKNOWN不绕行。未知先原身份只读对账。同问题累计尝试，无新依据不重复；原更严格的有限纠正/截止优先，连续两轮未解重评不自增额度。不要为保持运行增加无关功能或验证工具。
 
-本节是Host协调规则及只读输出解释。Stop Hook仍是非强制提醒，不调度、不承诺跨idle或会话恢复；自动续轮、共享预算和后台执行仍不支持。
+本节是Host协调规则及只读输出解释。Stop Hook仍是非强制提醒。由用户启动的 Codex Goal 沿宿主原生生命周期运行；XDev 运行时的自动续轮、共享预算和后台执行仍不支持。
 
 ## R4 工作分流（MECH-02）
 

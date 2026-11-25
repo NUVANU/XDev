@@ -25,6 +25,14 @@ Your agent says the feature is finished. But did it implement the agreed behavio
 
 Useful for maintained products, multi-session development, and agent handoffs where a convincing final message is insufficient evidence.
 
+## What's new in 0.1.6
+
+**Keep an approved milestone moving with Codex's native Goal.** In the main coordinator chat, XDev can offer a one-time choice to start the current confirmed milestone as a Goal. It checks the existing Goal, project, XSpec version, acceptance criteria and authorization before creation. An unfinished Goal is preserved; choosing Later or leaving the option unanswered creates nothing.
+
+Goal is optional host functionality. If unavailable or declined, ordinary authorized work continues. It does not replace scope, budget, non-author Review or actual QA. This update preserves the project-local data layout introduced in 0.1.5.
+
+See [the update and verification scope](docs/PUBLIC-UPDATE-20261125.md) and [milestone Goal workflow](docs/CODEX-MILESTONE-GOAL.zh.md).
+
 ## What's new in 0.1.5
 
 This update adds an explicit project-local data layout for ordinary supervised work.
@@ -73,7 +81,7 @@ If execution is interrupted, inspect the original Job and records first. Recover
 
 ## Quick start
 
-**Public source: 0.1.5 · MPL-2.0 · Windows/Codex is the validated local path.** Source provenance and packaging differences are listed in [this update note](docs/PUBLIC-UPDATE-20261120.md).
+**Public source: 0.1.6 · MPL-2.0 · Windows/Codex is the validated local path.** Source provenance and packaging differences are listed in [this update note](docs/PUBLIC-UPDATE-20261125.md).
 
 Use Node.js **24.20.0**, pnpm **11.25.0**, and npm **11.19.0** for the documented local path:
 
@@ -129,6 +137,8 @@ The optional legacy XMem bridge accepts specific qualified runtime builds and st
 Hashes establish content consistency, not the truth of a conclusion or authenticated human approval. XDev does not intercept every shell operation or prove that a model followed every instruction.
 
 ## Validation and limits
+
+The 0.1.6 public integration passed typecheck, **35/35** continuation/hook tests, **65/65** setup/UNBOUND tests, and an isolated SDK/stdio version/binding check. The Goal increment also has a separate source Review record. These checks do not prove real product Goal creation, cross-turn adoption or current-chat reload. See [this update note](docs/PUBLIC-UPDATE-20261125.md).
 
 The layout changes passed independent source Review and separate verifier read-only stdio checks for project-local and external bindings. The related regression package completed **65/65**, and typecheck passed. A synthetic approved Job start/query is not a complete business implementation/Review/QA cycle. A Windows case-sensitive-directory branch remains unrun on the tested volume; historical integration failures and UNKNOWN are retained. See the [validation scope and retained limits](docs/PUBLIC-UPDATE-20261120.md).
 
